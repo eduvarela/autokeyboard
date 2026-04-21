@@ -15,6 +15,78 @@ DEFAULT_START_DELAY = 3
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
 KEY_HOLD_SECONDS = 0.03
+KEY_COMBO_OPTIONS = (
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "F12",
+    "space",
+    "enter",
+    "tab",
+    "esc",
+    "backspace",
+    "delete",
+    "insert",
+    "home",
+    "end",
+    "pageup",
+    "pagedown",
+    "left",
+    "right",
+    "up",
+    "down",
+    "ctrl+s",
+    "ctrl+c",
+    "ctrl+v",
+    "ctrl+z",
+    "ctrl+shift+s",
+    "alt+tab",
+    "ctrl+alt+del",
+)
 
 
 @dataclass
@@ -320,7 +392,11 @@ class AutoKeyboardApp:
         config_panel.columnconfigure(1, weight=1)
 
         ttk.Label(config_panel, text="Tecla ou atalho", style="Body.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Entry(config_panel, textvariable=self.single_combo_var).grid(row=0, column=1, sticky="ew", padx=(8, 0))
+        ttk.Combobox(
+            config_panel,
+            textvariable=self.single_combo_var,
+            values=KEY_COMBO_OPTIONS,
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
         ttk.Label(config_panel, text="Intervalo (ms)", style="Body.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
         ttk.Entry(config_panel, textvariable=self.interval_var).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(10, 0))
@@ -349,7 +425,11 @@ class AutoKeyboardApp:
 
         ttk.Label(editor, text="Tecla ou atalho", style="Body.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(editor, text="Aguardar depois (ms)", style="Body.TLabel").grid(row=0, column=1, sticky="w", padx=(8, 0))
-        ttk.Entry(editor, textvariable=self.step_combo_var).grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        ttk.Combobox(
+            editor,
+            textvariable=self.step_combo_var,
+            values=KEY_COMBO_OPTIONS,
+        ).grid(row=1, column=0, sticky="ew", pady=(6, 0))
         ttk.Entry(editor, textvariable=self.step_delay_var).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
 
         action_bar = ttk.Frame(sequence_panel, style="Root.TFrame")

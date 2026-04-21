@@ -1,20 +1,7 @@
 {
-  "single_combo": "A",
-  "interval_ms": "500",
+  "single_combo": "F6",
+  "interval_ms": "1000",
   "start_delay": "3",
-  "sequence_pause": "0",
-  "sequence_steps": [
-    {
-      "combo": "a",
-      "delay_ms": 500
-    },
-    {
-      "combo": "b",
-      "delay_ms": 500
-    },
-    {
-      "combo": "c",
-      "delay_ms": 500
-    }
-  ]
+  "sequence_pause": "1000",
+  "sequence_steps": []
 }
