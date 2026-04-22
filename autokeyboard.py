@@ -719,6 +719,8 @@ class AutoKeyboardApp:
             background=self.colors["field"],
             foreground=self.colors["text"],
             bordercolor=self.colors["outline"],
+            lightcolor=self.colors["outline"],
+            darkcolor=self.colors["outline"],
             arrowcolor=self.colors["accent"],
             insertcolor=self.colors["accent"],
             padding=8,
@@ -738,6 +740,10 @@ class AutoKeyboardApp:
             borderwidth=0,
             relief="flat",
             font=self.fonts["body"],
+        )
+        style.layout(
+            "Console.Treeview",
+            [("Treeview.treearea", {"sticky": "nswe"})],
         )
         style.configure(
             "Console.Treeview.Heading",
@@ -1057,13 +1063,17 @@ class AutoKeyboardApp:
         tk.Label(editor_block, text=tr("labels.header_key_hotkey"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
         tk.Label(editor_block, text=tr("labels.header_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
 
+        step_combo_field = tk.Frame(editor_block, bg=self.colors["outline"])
+        step_combo_field.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        step_combo_inner = tk.Frame(step_combo_field, bg=self.colors["field"])
+        step_combo_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.step_combo_box = ttk.Combobox(
-            editor_block,
+            step_combo_inner,
             textvariable=self.step_combo_var,
             values=KEY_COMBO_OPTIONS,
             style="Console.TCombobox",
         )
-        self.step_combo_box.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        self.step_combo_box.pack(fill="x", expand=True)
 
         delay_field = tk.Frame(editor_block, bg=self.colors["outline"])
         delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0))
@@ -1073,8 +1083,13 @@ class AutoKeyboardApp:
         self.step_delay_entry.pack(side="left", fill="x", expand=True)
         tk.Label(delay_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
+        sequence_table_field = tk.Frame(sequence_panel, bg=self.colors["outline"])
+        sequence_table_field.pack(fill="both", expand=True)
+        sequence_table_inner = tk.Frame(sequence_table_field, bg=self.colors["panel"])
+        sequence_table_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
         self.sequence_table = ttk.Treeview(
-            sequence_panel,
+            sequence_table_inner,
             columns=("order", "combo", "delay"),
             show="headings",
             height=11,
@@ -1170,10 +1185,10 @@ class AutoKeyboardApp:
 
         single_field = tk.Frame(fields, bg=self.colors["outline"])
         single_field.grid(row=3, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
-        single_inner = tk.Frame(single_field, bg=self.colors["field"])
-        single_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        single_combo_inner = tk.Frame(single_field, bg=self.colors["field"])
+        single_combo_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.single_combo_box = ttk.Combobox(
-            single_inner,
+            single_combo_inner,
             textvariable=self.single_combo_var,
             values=KEY_COMBO_OPTIONS,
             style="Console.TCombobox",
