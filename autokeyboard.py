@@ -129,7 +129,7 @@ DEFAULT_TRANSLATIONS = {
         "labels": {
             "mode_single": "MODO TECLA UNICA",
             "mode_sequence": "MODO SEQUENCIA ATIVO",
-            "profile_name": "Auto Keyboard",
+            "profile_name": "Profile1",
             "profile_state_ready": "PRONTO",
             "profile_state_active": "ATIVO",
             "profile_meta": "Perfil de automacao precisa",
@@ -231,7 +231,7 @@ DEFAULT_TRANSLATIONS = {
         "labels": {
             "mode_single": "SINGLE KEY FALLBACK",
             "mode_sequence": "SEQUENCE MODE ACTIVE",
-            "profile_name": "Auto Keyboard",
+            "profile_name": "Profile1",
             "profile_state_ready": "READY",
             "profile_state_active": "ACTIVE",
             "profile_meta": "Precision automation profile",
@@ -651,6 +651,8 @@ class AutoKeyboardApp:
         self.stop_event = threading.Event()
         self.messages: queue.Queue[tuple[str, str]] = queue.Queue()
         self.sender = KeySender()
+        self.profile_name_entry_var = tk.StringVar(value=self.profile_name_var.get())
+        self._profile_name_before_edit = self.profile_name_var.get()
 
         self._build_styles()
         self._build_layout()
@@ -983,13 +985,22 @@ class AutoKeyboardApp:
         profile_text.pack(side="left")
         title_row = tk.Frame(profile_text, bg=self.colors["panel_high"])
         title_row.pack(anchor="w")
-        tk.Label(
+        self.profile_name_label = tk.Label(
             title_row,
             textvariable=self.profile_name_var,
             bg=self.colors["panel_high"],
             fg=self.colors["text"],
             font=("Space Grotesk", 20, "bold"),
-        ).pack(side="left")
+            cursor="hand2",
+        )
+        self.profile_name_label.pack(side="left")
+        self.profile_name_label.bind("<Button-1>", self._begin_profile_name_edit)
+
+        self.profile_name_entry_var.set(self.profile_name_var.get())
+        self.profile_name_entry = ttk.Entry(title_row, textvariable=self.profile_name_entry_var, style="Console.TEntry")
+        self.profile_name_entry.bind("<Return>", self._commit_profile_name_edit)
+        self.profile_name_entry.bind("<Escape>", self._cancel_profile_name_edit)
+        self.profile_name_entry.bind("<FocusOut>", self._commit_profile_name_edit)
         self.profile_badge = tk.Label(
             title_row,
             textvariable=self.profile_state_var,
@@ -1190,9 +1201,33 @@ class AutoKeyboardApp:
         self._save_config()
         self.status_var.set(tr("status.profile_saved"))
 
+    def _begin_profile_name_edit(self, _event: object | None = None) -> None:
+        self._profile_name_before_edit = self.profile_name_var.get()
+        self.profile_name_entry_var.set(self.profile_name_var.get())
+        self.profile_name_label.pack_forget()
+        self.profile_name_entry.pack(side="left", before=self.profile_badge)
+        self.profile_name_entry.focus_set()
+        self.profile_name_entry.selection_range(0, "end")
+
+    def _commit_profile_name_edit(self, _event: object | None = None) -> None:
+        new_name = self.profile_name_entry_var.get().strip() or tr("labels.profile_name")
+        self.profile_name_var.set(new_name)
+        self.profile_name_entry_var.set(new_name)
+        if self.profile_name_entry.winfo_manager():
+            self.profile_name_entry.pack_forget()
+            self.profile_name_label.pack(side="left", before=self.profile_badge)
+        self._save_config()
+
+    def _cancel_profile_name_edit(self, _event: object | None = None) -> None:
+        self.profile_name_entry_var.set(self._profile_name_before_edit)
+        if self.profile_name_entry.winfo_manager():
+            self.profile_name_entry.pack_forget()
+            self.profile_name_label.pack(side="left", before=self.profile_badge)
+
     def _profile_payload(self) -> dict[str, object]:
         return {
             "language": self.current_language,
+            "profile_name": self.profile_name_var.get().strip(),
             "single_combo": self.single_combo_var.get().strip(),
             "interval_ms": self.interval_var.get().strip(),
             "start_delay": self.start_delay_var.get().strip(),
@@ -1208,6 +1243,8 @@ class AutoKeyboardApp:
             self.current_language = CURRENT_LANGUAGE
             self._rebuild_ui()
 
+        self.profile_name_var.set(str(payload.get("profile_name", self.profile_name_var.get())).strip() or tr("labels.profile_name"))
+        self.profile_name_entry_var.set(self.profile_name_var.get())
         self.single_combo_var.set(str(payload.get("single_combo", self.single_combo_var.get())))
         self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
         self.start_delay_var.set(str(payload.get("start_delay", self.start_delay_var.get())))
