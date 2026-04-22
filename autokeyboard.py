@@ -3,6 +3,7 @@ import json
 import queue
 import threading
 import time
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import tkinter as tk
@@ -11,6 +12,7 @@ from ctypes import wintypes
 
 
 CONFIG_PATH = Path(__file__).with_name("autokeyboard_config.json")
+STRINGS_PATH = Path(__file__).with_name("strings.json")
 DEFAULT_START_DELAY = 3
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
@@ -88,6 +90,143 @@ KEY_COMBO_OPTIONS = (
     "alt+tab",
     "ctrl+alt+del",
 )
+
+DEFAULT_STRINGS = {
+    "app": {
+        "title": "Auto Keyboard",
+        "version": "v1.0",
+    },
+    "status": {
+        "ready": "Pronto para iniciar.",
+        "profile_saved": "Perfil salvo no painel atual.",
+        "step_added": "Passo adicionado na sequencia.",
+        "step_updated": "Passo atualizado.",
+        "step_removed": "Passo removido.",
+        "sequence_cleared": "Sequencia limpa. O app voltou para o modo de tecla unica.",
+        "stopping": "Parando automacao...",
+        "starting_mode": "Automacao iniciada em modo {mode_label}. Troque o foco para a janela alvo durante a contagem.",
+        "countdown": "Iniciando em {remaining}s. Deixe a janela alvo em foco.",
+        "stopped_before_start": "Automacao interrompida antes de iniciar.",
+        "sequence_running": "Sequencia em execucao ({mode_label}).",
+        "single_running": "Tecla '{combo}' em repeticao ({mode_label}).",
+        "automation_stopped": "Automacao interrompida.",
+        "send_failure": "Falha ao enviar tecla: {error}",
+        "unexpected_error": "Erro inesperado: {error}",
+        "automation_finished": "Automacao finalizada.",
+        "config_load_failed": "Nao foi possivel carregar a configuracao anterior.",
+    },
+    "labels": {
+        "mode_single": "SINGLE KEY FALLBACK",
+        "mode_sequence": "SEQUENCE MODE ACTIVE",
+        "profile_name": "Auto Keyboard",
+        "profile_state_ready": "READY",
+        "profile_state_active": "ACTIVE",
+        "profile_meta": "Precision automation profile",
+        "engine_scan_code": "SCAN CODE",
+        "engine_virtual_key": "VIRTUAL KEY",
+        "brand": "Auto Keyboard",
+        "nav_title": "Sequence slots",
+        "metric_actions": "TOTAL ACTIONS",
+        "metric_cycle": "CYCLE TIME",
+        "panel_sequence_title": "SEQUENCE_BUILDER",
+        "panel_sequence_subtitle": "Build and tune your key rotation sequence with hardware-style modules.",
+        "panel_execution_title": "SYSTEM_EXECUTION",
+        "panel_execution_subtitle": "High-contrast controls with live engine telemetry.",
+        "panel_config_title": "CONFIG_PARAMETERS",
+        "panel_config_subtitle": "Precision timing, fallback behavior, and compatibility settings.",
+        "header_key_hotkey": "KEY / HOTKEY",
+        "header_delay": "DELAY",
+        "table_id": "ID",
+        "table_action": "ACTION",
+        "table_wait": "WAIT",
+        "button_remove": "REMOVE",
+        "button_add_action": "ADD ACTION",
+        "button_add": "ADD",
+        "button_update": "UPDATE",
+        "button_up": "UP",
+        "button_down": "DOWN",
+        "button_clear": "CLEAR",
+        "button_start": "START",
+        "button_stop": "STOP",
+        "label_global_interval": "GLOBAL INTERVAL",
+        "label_initial_delay": "INITIAL DELAY",
+        "label_sequence_loop_pause": "SEQUENCE LOOP PAUSE",
+        "label_single_key_fallback": "SINGLE KEY FALLBACK",
+        "checkbox_scancode": "Usar scan code (melhor para jogos)",
+        "unit_ms": "ms",
+        "unit_sec": "sec",
+        "summary_no_fallback": "No fallback key",
+        "summary_profile_meta": "{actions} action(s) configured • Fallback: {combo_display} • {mode_name}",
+        "mode_scan_code_lower": "scan code",
+        "mode_virtual_key_lower": "virtual key",
+    },
+    "dialogs": {
+        "move_title": "Mover passo",
+        "move_select": "Selecione um passo para mover.",
+        "invalid_sequence_title": "Sequencia invalida",
+        "update_title": "Atualizar passo",
+        "update_select": "Selecione um passo para atualizar.",
+        "remove_title": "Remover passo",
+        "remove_select": "Selecione um passo para remover.",
+        "invalid_config_title": "Configuracao invalida",
+    },
+    "validation": {
+        "missing_key": "Informe ao menos uma tecla.",
+        "unknown_key": "Tecla desconhecida: '{key}'. Use nomes como A, F6, space, enter, ctrl+shift+s.",
+        "integer_required": "{label} precisa ser um numero inteiro.",
+        "non_negative_required": "{label} nao pode ser negativo.",
+        "label_step_delay": "Espera depois",
+        "label_interval": "Intervalo",
+        "label_start_delay": "Contagem inicial",
+        "label_sequence_pause": "Pausa apos sequencia",
+        "scancode_mapping_failed": "Nao foi possivel mapear a tecla {key_code} para scan code.",
+        "send_input_failed": "Falha ao enviar tecla para o Windows. Codigo: {error_code}",
+    },
+}
+
+
+def _merge_strings(base: dict, override: dict) -> dict:
+    merged = deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_strings(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+APP_STRINGS = deepcopy(DEFAULT_STRINGS)
+
+
+def load_app_strings() -> dict:
+    global APP_STRINGS
+    if not STRINGS_PATH.exists():
+        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
+        return APP_STRINGS
+
+    try:
+        payload = json.loads(STRINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
+        return APP_STRINGS
+
+    if not isinstance(payload, dict):
+        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
+        return APP_STRINGS
+
+    APP_STRINGS = _merge_strings(DEFAULT_STRINGS, payload)
+    return APP_STRINGS
+
+
+def tr(path: str, **kwargs: object) -> str:
+    value: object = APP_STRINGS
+    for part in path.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return path
+        value = value[part]
+    if not isinstance(value, str):
+        return path
+    return value.format(**kwargs) if kwargs else value
 
 
 @dataclass
@@ -224,15 +363,13 @@ EXTENDED_KEY_CODES = {
 def parse_key_combo(combo: str) -> list[int]:
     raw_parts = [part for part in combo.split("+") if part.strip()]
     if not raw_parts:
-        raise ValueError("Informe ao menos uma tecla.")
+        raise ValueError(tr("validation.missing_key"))
 
     resolved = []
     for raw_part in raw_parts:
         token = normalize_key_name(raw_part)
         if token not in VIRTUAL_KEYS:
-            raise ValueError(
-                f"Tecla desconhecida: '{raw_part.strip()}'. Use nomes como A, F6, space, enter, ctrl+shift+s."
-            )
+            raise ValueError(tr("validation.unknown_key", key=raw_part.strip()))
         resolved.append(VIRTUAL_KEYS[token])
     return resolved
 
@@ -241,9 +378,9 @@ def parse_non_negative_int(value: str, label: str) -> int:
     try:
         parsed = int(value)
     except ValueError as exc:
-        raise ValueError(f"{label} precisa ser um numero inteiro.") from exc
+        raise ValueError(tr("validation.integer_required", label=label)) from exc
     if parsed < 0:
-        raise ValueError(f"{label} nao pode ser negativo.")
+        raise ValueError(tr("validation.non_negative_required", label=label))
     return parsed
 
 
@@ -326,7 +463,7 @@ class KeySender:
         if use_scancodes:
             scan_code = self.user32.MapVirtualKeyW(key_code, self.MAPVK_VK_TO_VSC)
             if scan_code == 0:
-                raise OSError(f"Nao foi possivel mapear a tecla {key_code} para scan code.")
+                raise OSError(tr("validation.scancode_mapping_failed", key_code=key_code))
             flags |= self.KEYEVENTF_SCANCODE
             if key_code in EXTENDED_KEY_CODES:
                 flags |= self.KEYEVENTF_EXTENDEDKEY
@@ -342,7 +479,7 @@ class KeySender:
         sent = self.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
         if sent != 1:
             error_code = ctypes.get_last_error()
-            raise OSError(f"Falha ao enviar tecla para o Windows. Codigo: {error_code}")
+            raise OSError(tr("validation.send_input_failed", error_code=error_code))
 
     def send_combo(self, combo: str, use_scancodes: bool = False) -> None:
         virtual_keys = parse_key_combo(combo)
@@ -355,8 +492,9 @@ class KeySender:
 
 class AutoKeyboardApp:
     def __init__(self, root: tk.Tk) -> None:
+        load_app_strings()
         self.root = root
-        self.root.title("Auto Keyboard")
+        self.root.title(tr("app.title"))
         self.root.geometry("1360x860")
         self.root.minsize(1180, 760)
 
@@ -367,14 +505,14 @@ class AutoKeyboardApp:
         self.use_scancodes_var = tk.BooleanVar(value=DEFAULT_USE_SCANCODES)
         self.step_combo_var = tk.StringVar()
         self.step_delay_var = tk.StringVar(value="500")
-        self.status_var = tk.StringVar(value="Pronto para iniciar.")
-        self.mode_hint_var = tk.StringVar(value="SINGLE KEY FALLBACK")
-        self.profile_name_var = tk.StringVar(value="Auto Keyboard")
-        self.profile_state_var = tk.StringVar(value="READY")
-        self.profile_meta_var = tk.StringVar(value="Precision automation profile")
+        self.status_var = tk.StringVar(value=tr("status.ready"))
+        self.mode_hint_var = tk.StringVar(value=tr("labels.mode_single"))
+        self.profile_name_var = tk.StringVar(value=tr("labels.profile_name"))
+        self.profile_state_var = tk.StringVar(value=tr("labels.profile_state_ready"))
+        self.profile_meta_var = tk.StringVar(value=tr("labels.profile_meta"))
         self.actions_count_var = tk.StringVar(value="0")
         self.cycle_time_var = tk.StringVar(value="0ms")
-        self.engine_mode_var = tk.StringVar(value="SCAN CODE")
+        self.engine_mode_var = tk.StringVar(value=tr("labels.engine_scan_code"))
 
         self.sequence_steps: list[SequenceStep] = []
         self.worker_thread: threading.Thread | None = None
@@ -601,14 +739,14 @@ class AutoKeyboardApp:
         brand.grid(row=0, column=0, sticky="w")
         tk.Label(
             brand,
-            text="Auto Keyboard",
+            text=tr("labels.brand"),
             bg=self.colors["background"],
             fg=self.colors["accent"],
             font=self.fonts["brand"],
         ).pack(side="left")
         tk.Label(
             brand,
-            text="v1.0",
+            text=tr("app.version"),
             bg=self.colors["background"],
             fg=self.colors["subtle"],
             font=self.fonts["nav"],
@@ -660,16 +798,16 @@ class AutoKeyboardApp:
 
         metrics = tk.Frame(summary, bg=self.colors["panel_high"])
         metrics.grid(row=0, column=1, sticky="e")
-        self._create_metric_card(metrics, "TOTAL ACTIONS", self.actions_count_var)
-        self._create_metric_card(metrics, "CYCLE TIME", self.cycle_time_var)
+        self._create_metric_card(metrics, tr("labels.metric_actions"), self.actions_count_var)
+        self._create_metric_card(metrics, tr("labels.metric_cycle"), self.cycle_time_var)
 
         sequence_panel = self._create_panel(
             shell,
             row=2,
             column=0,
             rowspan=3,
-            title="SEQUENCE_BUILDER",
-            subtitle="Build and tune your key rotation sequence with hardware-style modules.",
+            title=tr("labels.panel_sequence_title"),
+            subtitle=tr("labels.panel_sequence_subtitle"),
         )
         sequence_panel.grid_rowconfigure(2, weight=1)
         sequence_panel.grid_columnconfigure(0, weight=1)
@@ -678,23 +816,23 @@ class AutoKeyboardApp:
         sequence_header.pack(fill="x", pady=(0, 10))
         tk.Label(
             sequence_header,
-            text="Sequence slots",
+            text=tr("labels.nav_title"),
             bg=self.colors["panel"],
             fg=self.colors["text"],
             font=self.fonts["headline"],
         ).pack(side="left")
         header_actions = tk.Frame(sequence_header, bg=self.colors["panel"])
         header_actions.pack(side="right")
-        ttk.Button(header_actions, text="REMOVE", command=self._remove_selected_step, style="Slim.TButton").pack(side="right")
-        ttk.Button(header_actions, text="ADD ACTION", command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
+        ttk.Button(header_actions, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Slim.TButton").pack(side="right")
+        ttk.Button(header_actions, text=tr("labels.button_add_action"), command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
 
         editor_block = tk.Frame(sequence_panel, bg=self.colors["panel"])
         editor_block.pack(fill="x", pady=(0, 12))
         editor_block.grid_columnconfigure(0, weight=2)
         editor_block.grid_columnconfigure(1, weight=1)
 
-        tk.Label(editor_block, text="KEY / HOTKEY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
-        tk.Label(editor_block, text="DELAY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        tk.Label(editor_block, text=tr("labels.header_key_hotkey"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
+        tk.Label(editor_block, text=tr("labels.header_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         self.step_combo_box = ttk.Combobox(
             editor_block,
@@ -710,7 +848,7 @@ class AutoKeyboardApp:
         delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.step_delay_entry = ttk.Entry(delay_inner, textvariable=self.step_delay_var, style="Console.TEntry")
         self.step_delay_entry.pack(side="left", fill="x", expand=True)
-        tk.Label(delay_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+        tk.Label(delay_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
         self.sequence_table = ttk.Treeview(
             sequence_panel,
@@ -719,9 +857,9 @@ class AutoKeyboardApp:
             height=11,
             style="Console.Treeview",
         )
-        self.sequence_table.heading("order", text="ID")
-        self.sequence_table.heading("combo", text="ACTION")
-        self.sequence_table.heading("delay", text="WAIT")
+        self.sequence_table.heading("order", text=tr("labels.table_id"))
+        self.sequence_table.heading("combo", text=tr("labels.table_action"))
+        self.sequence_table.heading("delay", text=tr("labels.table_wait"))
         self.sequence_table.column("order", width=70, anchor="center")
         self.sequence_table.column("combo", width=250, anchor="w")
         self.sequence_table.column("delay", width=130, anchor="center")
@@ -733,19 +871,19 @@ class AutoKeyboardApp:
         for index in range(6):
             action_bar.grid_columnconfigure(index, weight=1)
 
-        ttk.Button(action_bar, text="ADD", command=self._add_step, style="Ghost.TButton").grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        ttk.Button(action_bar, text="UPDATE", command=self._update_selected_step, style="Ghost.TButton").grid(row=0, column=1, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="REMOVE", command=self._remove_selected_step, style="Ghost.TButton").grid(row=0, column=2, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="UP", command=lambda: self._move_selected_step(-1), style="Slim.TButton").grid(row=0, column=3, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="DOWN", command=lambda: self._move_selected_step(1), style="Slim.TButton").grid(row=0, column=4, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="CLEAR", command=self._clear_sequence, style="Ghost.TButton").grid(row=0, column=5, sticky="ew", padx=(6, 0))
+        ttk.Button(action_bar, text=tr("labels.button_add"), command=self._add_step, style="Ghost.TButton").grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(action_bar, text=tr("labels.button_update"), command=self._update_selected_step, style="Ghost.TButton").grid(row=0, column=1, sticky="ew", padx=6)
+        ttk.Button(action_bar, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton").grid(row=0, column=2, sticky="ew", padx=6)
+        ttk.Button(action_bar, text=tr("labels.button_up"), command=lambda: self._move_selected_step(-1), style="Slim.TButton").grid(row=0, column=3, sticky="ew", padx=6)
+        ttk.Button(action_bar, text=tr("labels.button_down"), command=lambda: self._move_selected_step(1), style="Slim.TButton").grid(row=0, column=4, sticky="ew", padx=6)
+        ttk.Button(action_bar, text=tr("labels.button_clear"), command=self._clear_sequence, style="Ghost.TButton").grid(row=0, column=5, sticky="ew", padx=(6, 0))
 
         execution_panel = self._create_panel(
             shell,
             row=2,
             column=1,
-            title="SYSTEM_EXECUTION",
-            subtitle="High-contrast controls with live engine telemetry.",
+            title=tr("labels.panel_execution_title"),
+            subtitle=tr("labels.panel_execution_subtitle"),
         )
 
         controls_row = tk.Frame(execution_panel, bg=self.colors["panel"])
@@ -753,9 +891,9 @@ class AutoKeyboardApp:
         controls_row.grid_columnconfigure(0, weight=1)
         controls_row.grid_columnconfigure(1, weight=1)
 
-        self.start_button = ttk.Button(controls_row, text="START", command=self.start, style="Primary.TButton")
+        self.start_button = ttk.Button(controls_row, text=tr("labels.button_start"), command=self.start, style="Primary.TButton")
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.stop_button = ttk.Button(controls_row, text="STOP", command=self.stop, style="Danger.TButton")
+        self.stop_button = ttk.Button(controls_row, text=tr("labels.button_stop"), command=self.stop, style="Danger.TButton")
         self.stop_button.grid(row=0, column=1, sticky="ew")
         self.stop_button.state(["disabled"])
 
@@ -771,8 +909,8 @@ class AutoKeyboardApp:
             shell,
             row=3,
             column=1,
-            title="CONFIG_PARAMETERS",
-            subtitle="Precision timing, fallback behavior, and compatibility settings.",
+            title=tr("labels.panel_config_title"),
+            subtitle=tr("labels.panel_config_subtitle"),
         )
 
         fields = tk.Frame(config_panel, bg=self.colors["panel"])
@@ -780,32 +918,32 @@ class AutoKeyboardApp:
         fields.grid_columnconfigure(0, weight=1)
         fields.grid_columnconfigure(1, weight=1)
 
-        tk.Label(fields, text="GLOBAL INTERVAL", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
-        tk.Label(fields, text="INITIAL DELAY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        tk.Label(fields, text=tr("labels.label_global_interval"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
+        tk.Label(fields, text=tr("labels.label_initial_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         interval_field = tk.Frame(fields, bg=self.colors["outline"])
         interval_field.grid(row=1, column=0, sticky="ew", pady=(8, 12))
         interval_inner = tk.Frame(interval_field, bg=self.colors["field"])
         interval_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(interval_inner, textvariable=self.interval_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
-        tk.Label(interval_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+        tk.Label(interval_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
         delay_field = tk.Frame(fields, bg=self.colors["outline"])
         delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
         delay_inner = tk.Frame(delay_field, bg=self.colors["field"])
         delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(delay_inner, textvariable=self.start_delay_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
-        tk.Label(delay_inner, text="sec", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+        tk.Label(delay_inner, text=tr("labels.unit_sec"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
-        tk.Label(fields, text="SEQUENCE LOOP PAUSE", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=0, sticky="w")
-        tk.Label(fields, text="SINGLE KEY FALLBACK", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=1, sticky="w", padx=(12, 0))
+        tk.Label(fields, text=tr("labels.label_sequence_loop_pause"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=0, sticky="w")
+        tk.Label(fields, text=tr("labels.label_single_key_fallback"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=1, sticky="w", padx=(12, 0))
 
         sequence_pause_field = tk.Frame(fields, bg=self.colors["outline"])
         sequence_pause_field.grid(row=3, column=0, sticky="ew", pady=(8, 12))
         sequence_pause_inner = tk.Frame(sequence_pause_field, bg=self.colors["field"])
         sequence_pause_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(sequence_pause_inner, textvariable=self.sequence_pause_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
-        tk.Label(sequence_pause_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+        tk.Label(sequence_pause_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
         single_field = tk.Frame(fields, bg=self.colors["outline"])
         single_field.grid(row=3, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
@@ -821,7 +959,7 @@ class AutoKeyboardApp:
 
         ttk.Checkbutton(
             config_panel,
-            text="Usar scan code (melhor para jogos)",
+            text=tr("labels.checkbox_scancode"),
             variable=self.use_scancodes_var,
             style="Console.TCheckbutton",
         ).pack(anchor="w", pady=(8, 6))
@@ -838,12 +976,12 @@ class AutoKeyboardApp:
 
     def _save_profile(self) -> None:
         self._save_config()
-        self.status_var.set("Perfil salvo no painel atual.")
+        self.status_var.set(tr("status.profile_saved"))
 
     def _move_selected_step(self, offset: int) -> None:
         index = self._selected_index()
         if index is None:
-            messagebox.showinfo("Mover passo", "Selecione um passo para mover.", parent=self.root)
+            messagebox.showinfo(tr("dialogs.move_title"), tr("dialogs.move_select"), parent=self.root)
             return
 
         target_index = index + offset
@@ -872,29 +1010,29 @@ class AutoKeyboardApp:
             actions = len(self.sequence_steps)
             cycle_ms = sum(step.delay_ms for step in self.sequence_steps)
             try:
-                cycle_ms += parse_non_negative_int(self.sequence_pause_var.get().strip(), "Pausa apos sequencia")
+                cycle_ms += parse_non_negative_int(self.sequence_pause_var.get().strip(), tr("validation.label_sequence_pause"))
             except ValueError:
                 cycle_ms += 0
-            self.mode_hint_var.set("SEQUENCE MODE ACTIVE")
+            self.mode_hint_var.set(tr("labels.mode_sequence"))
         else:
             actions = 1 if self.single_combo_var.get().strip() else 0
             try:
-                cycle_ms = parse_non_negative_int(self.interval_var.get().strip(), "Intervalo")
+                cycle_ms = parse_non_negative_int(self.interval_var.get().strip(), tr("validation.label_interval"))
             except ValueError:
                 cycle_ms = 0
-            self.mode_hint_var.set("SINGLE KEY FALLBACK")
+            self.mode_hint_var.set(tr("labels.mode_single"))
 
         self.actions_count_var.set(f"{actions:02d}")
         self.cycle_time_var.set(f"{cycle_ms / 1000:.1f}s" if cycle_ms >= 1000 else f"{cycle_ms}ms")
-        mode_name = "SCAN CODE" if self.use_scancodes_var.get() else "VIRTUAL KEY"
+        mode_name = tr("labels.engine_scan_code") if self.use_scancodes_var.get() else tr("labels.engine_virtual_key")
         self.engine_mode_var.set(mode_name)
-        combo_display = self.single_combo_var.get().strip() or "No fallback key"
-        self.profile_meta_var.set(f"{actions} action(s) configured • Fallback: {combo_display} • {mode_name}")
+        combo_display = self.single_combo_var.get().strip() or tr("labels.summary_no_fallback")
+        self.profile_meta_var.set(tr("labels.summary_profile_meta", actions=actions, combo_display=combo_display, mode_name=mode_name))
 
     def _update_status_indicator(self, running: bool) -> None:
         led_color = self.colors["accent"] if running else self.colors["subtle"]
         self.status_led.itemconfigure(self.status_led_dot, fill=led_color)
-        self.profile_state_var.set("ACTIVE" if running else "READY")
+        self.profile_state_var.set(tr("labels.profile_state_active") if running else tr("labels.profile_state_ready"))
         self.profile_badge.configure(
             bg=self.colors["accent_soft"] if running else self.colors["outline"],
             fg=self.colors["background"] if running else self.colors["text"],
@@ -945,7 +1083,7 @@ class AutoKeyboardApp:
 
     def _validate_step_inputs(self) -> SequenceStep:
         combo = self.step_combo_var.get().strip()
-        delay_ms = parse_non_negative_int(self.step_delay_var.get().strip(), "Espera depois")
+        delay_ms = parse_non_negative_int(self.step_delay_var.get().strip(), tr("validation.label_step_delay"))
         parse_key_combo(combo)
         return SequenceStep(combo=combo, delay_ms=delay_ms)
 
@@ -953,7 +1091,7 @@ class AutoKeyboardApp:
         try:
             step = self._validate_step_inputs()
         except ValueError as exc:
-            messagebox.showerror("Sequencia invalida", str(exc), parent=self.root)
+            messagebox.showerror(tr("dialogs.invalid_sequence_title"), str(exc), parent=self.root)
             return
 
         self.sequence_steps.append(step)
@@ -961,47 +1099,47 @@ class AutoKeyboardApp:
         self._save_config()
         self.step_combo_var.set("")
         self.step_delay_var.set("500")
-        self.status_var.set("Passo adicionado na sequencia.")
+        self.status_var.set(tr("status.step_added"))
 
     def _update_selected_step(self) -> None:
         index = self._selected_index()
         if index is None:
-            messagebox.showinfo("Atualizar passo", "Selecione um passo para atualizar.", parent=self.root)
+            messagebox.showinfo(tr("dialogs.update_title"), tr("dialogs.update_select"), parent=self.root)
             return
 
         try:
             step = self._validate_step_inputs()
         except ValueError as exc:
-            messagebox.showerror("Sequencia invalida", str(exc), parent=self.root)
+            messagebox.showerror(tr("dialogs.invalid_sequence_title"), str(exc), parent=self.root)
             return
 
         self.sequence_steps[index] = step
         self._refresh_sequence_table()
         self._save_config()
-        self.status_var.set("Passo atualizado.")
+        self.status_var.set(tr("status.step_updated"))
 
     def _remove_selected_step(self) -> None:
         index = self._selected_index()
         if index is None:
-            messagebox.showinfo("Remover passo", "Selecione um passo para remover.", parent=self.root)
+            messagebox.showinfo(tr("dialogs.remove_title"), tr("dialogs.remove_select"), parent=self.root)
             return
 
         del self.sequence_steps[index]
         self._refresh_sequence_table()
         self._save_config()
-        self.status_var.set("Passo removido.")
+        self.status_var.set(tr("status.step_removed"))
 
     def _clear_sequence(self) -> None:
         self.sequence_steps.clear()
         self._refresh_sequence_table()
         self._save_config()
-        self.status_var.set("Sequencia limpa. O app voltou para o modo de tecla unica.")
+        self.status_var.set(tr("status.sequence_cleared"))
 
     def _validate_run_inputs(self) -> tuple[str, int, int, int, bool, list[SequenceStep]]:
         combo = self.single_combo_var.get().strip()
-        interval_ms = parse_non_negative_int(self.interval_var.get().strip(), "Intervalo")
-        start_delay = parse_non_negative_int(self.start_delay_var.get().strip(), "Contagem inicial")
-        sequence_pause = parse_non_negative_int(self.sequence_pause_var.get().strip(), "Pausa apos sequencia")
+        interval_ms = parse_non_negative_int(self.interval_var.get().strip(), tr("validation.label_interval"))
+        start_delay = parse_non_negative_int(self.start_delay_var.get().strip(), tr("validation.label_start_delay"))
+        sequence_pause = parse_non_negative_int(self.sequence_pause_var.get().strip(), tr("validation.label_sequence_pause"))
         use_scancodes = self.use_scancodes_var.get()
 
         if self.sequence_steps:
@@ -1019,14 +1157,14 @@ class AutoKeyboardApp:
         try:
             combo, interval_ms, start_delay, sequence_pause, use_scancodes, sequence_steps = self._validate_run_inputs()
         except ValueError as exc:
-            messagebox.showerror("Configuracao invalida", str(exc), parent=self.root)
+            messagebox.showerror(tr("dialogs.invalid_config_title"), str(exc), parent=self.root)
             return
 
         self._save_config()
         self.stop_event.clear()
         self._set_running(True)
-        mode_label = "scan code" if use_scancodes else "virtual key"
-        self.messages.put(("info", f"Automacao iniciada em modo {mode_label}. Troque o foco para a janela alvo durante a contagem."))
+        mode_label = tr("labels.mode_scan_code_lower") if use_scancodes else tr("labels.mode_virtual_key_lower")
+        self.messages.put(("info", tr("status.starting_mode", mode_label=mode_label)))
         self.worker_thread = threading.Thread(
             target=self._run_worker,
             args=(combo, interval_ms, start_delay, sequence_pause, use_scancodes, sequence_steps),
@@ -1036,7 +1174,7 @@ class AutoKeyboardApp:
 
     def stop(self) -> None:
         self.stop_event.set()
-        self.messages.put(("info", "Parando automacao..."))
+        self.messages.put(("info", tr("status.stopping")))
 
     def _run_worker(
         self,
@@ -1049,37 +1187,37 @@ class AutoKeyboardApp:
     ) -> None:
         try:
             for remaining in range(start_delay, 0, -1):
-                self.messages.put(("info", f"Iniciando em {remaining}s. Deixe a janela alvo em foco."))
+                self.messages.put(("info", tr("status.countdown", remaining=remaining)))
                 if not sleep_interruptible(1.0, self.stop_event):
-                    self.messages.put(("stopped", "Automacao interrompida antes de iniciar."))
+                    self.messages.put(("stopped", tr("status.stopped_before_start")))
                     return
 
             if sequence_steps:
-                mode_label = "scan code" if use_scancodes else "virtual key"
-                self.messages.put(("info", f"Sequencia em execucao ({mode_label})."))
+                mode_label = tr("labels.mode_scan_code_lower") if use_scancodes else tr("labels.mode_virtual_key_lower")
+                self.messages.put(("info", tr("status.sequence_running", mode_label=mode_label)))
                 while not self.stop_event.is_set():
                     for step in sequence_steps:
                         self.sender.send_combo(step.combo, use_scancodes=use_scancodes)
                         if not sleep_interruptible(step.delay_ms / 1000, self.stop_event):
-                            self.messages.put(("stopped", "Automacao interrompida."))
+                            self.messages.put(("stopped", tr("status.automation_stopped")))
                             return
                     if sequence_pause > 0 and not sleep_interruptible(sequence_pause / 1000, self.stop_event):
-                        self.messages.put(("stopped", "Automacao interrompida."))
+                        self.messages.put(("stopped", tr("status.automation_stopped")))
                         return
             else:
-                mode_label = "scan code" if use_scancodes else "virtual key"
-                self.messages.put(("info", f"Tecla '{combo}' em repeticao ({mode_label})."))
+                mode_label = tr("labels.mode_scan_code_lower") if use_scancodes else tr("labels.mode_virtual_key_lower")
+                self.messages.put(("info", tr("status.single_running", combo=combo, mode_label=mode_label)))
                 while not self.stop_event.is_set():
                     self.sender.send_combo(combo, use_scancodes=use_scancodes)
                     if not sleep_interruptible(interval_ms / 1000, self.stop_event):
-                        self.messages.put(("stopped", "Automacao interrompida."))
+                        self.messages.put(("stopped", tr("status.automation_stopped")))
                         return
         except OSError as exc:
-            self.messages.put(("stopped", f"Falha ao enviar tecla: {exc}"))
+            self.messages.put(("stopped", tr("status.send_failure", error=exc)))
         except Exception as exc:
-            self.messages.put(("stopped", f"Erro inesperado: {exc}"))
+            self.messages.put(("stopped", tr("status.unexpected_error", error=exc)))
         else:
-            self.messages.put(("stopped", "Automacao finalizada."))
+            self.messages.put(("stopped", tr("status.automation_finished")))
 
     def _save_config(self) -> None:
         payload = {
@@ -1099,7 +1237,7 @@ class AutoKeyboardApp:
         try:
             payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            self.status_var.set("Nao foi possivel carregar a configuracao anterior.")
+            self.status_var.set(tr("status.config_load_failed"))
             return
 
         self.single_combo_var.set(payload.get("single_combo", self.single_combo_var.get()))
@@ -1131,6 +1269,7 @@ class AutoKeyboardApp:
 
 
 def main() -> None:
+    load_app_strings()
     root = tk.Tk()
     AutoKeyboardApp(root)
     root.mainloop()
