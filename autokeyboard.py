@@ -1,5 +1,6 @@
 import ctypes
 import json
+import locale
 import queue
 import threading
 import time
@@ -21,7 +22,8 @@ DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
 KEY_HOLD_SECONDS = 0.03
 DEFAULT_USE_SCANCODES = True
-DEFAULT_LANGUAGE = "pt-BR"
+ENGLISH_LANGUAGE = "en"
+PORTUGUESE_LANGUAGE = "pt-BR"
 LANGUAGE_ASSETS = {
     "pt-BR": PORTUGUESE_FLAG_PATH,
     "en": ENGLISH_FLAG_PATH,
@@ -317,6 +319,44 @@ def _merge_strings(base: dict, override: dict) -> dict:
     return merged
 
 
+def detect_system_language() -> str:
+    locale_candidates: list[str] = []
+
+    try:
+        language_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+    except (AttributeError, OSError):
+        language_id = 0
+
+    if language_id:
+        windows_locale = locale.windows_locale.get(language_id)
+        if windows_locale:
+            locale_candidates.append(windows_locale)
+
+    for getter_name in ("getlocale", "getdefaultlocale"):
+        getter = getattr(locale, getter_name, None)
+        if getter is None:
+            continue
+        try:
+            values = getter()
+        except (ValueError, TypeError):
+            continue
+
+        if isinstance(values, tuple):
+            for value in values:
+                if isinstance(value, str) and value:
+                    locale_candidates.append(value)
+        elif isinstance(values, str) and values:
+            locale_candidates.append(values)
+
+    for locale_name in locale_candidates:
+        normalized = locale_name.lower().replace("_", "-")
+        if normalized.startswith("pt"):
+            return PORTUGUESE_LANGUAGE
+
+    return ENGLISH_LANGUAGE
+
+
+DEFAULT_LANGUAGE = detect_system_language()
 APP_TRANSLATIONS = deepcopy(DEFAULT_TRANSLATIONS)
 APP_STRINGS = deepcopy(DEFAULT_TRANSLATIONS[DEFAULT_LANGUAGE])
 CURRENT_LANGUAGE = DEFAULT_LANGUAGE

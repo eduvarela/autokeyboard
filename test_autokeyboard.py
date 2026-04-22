@@ -8,6 +8,8 @@ from unittest.mock import patch
 import autokeyboard
 from autokeyboard import (
     DEFAULT_LANGUAGE,
+    DEFAULT_TRANSLATIONS,
+    detect_system_language,
     load_app_strings,
     parse_key_combo,
     parse_non_negative_int,
@@ -69,7 +71,10 @@ class AppStringsTests(unittest.TestCase):
     def test_unknown_language_falls_back_to_default(self) -> None:
         load_app_strings("es")
         self.assertEqual(autokeyboard.CURRENT_LANGUAGE, DEFAULT_LANGUAGE)
-        self.assertEqual(tr("labels.button_start"), "INICIAR")
+        self.assertEqual(
+            tr("labels.button_start"),
+            DEFAULT_TRANSLATIONS[DEFAULT_LANGUAGE]["labels"]["button_start"],
+        )
 
     def test_custom_strings_file_overrides_and_formats(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -113,6 +118,30 @@ class SleepInterruptibleTests(unittest.TestCase):
     def test_returns_true_when_sleep_completes(self) -> None:
         stop_event = threading.Event()
         self.assertTrue(sleep_interruptible(0.0, stop_event))
+
+
+class DetectSystemLanguageTests(unittest.TestCase):
+    def test_returns_portuguese_for_portuguese_windows_locale(self) -> None:
+        mocked_windll = type(
+            "MockWindll",
+            (),
+            {"kernel32": type("Kernel32", (), {"GetUserDefaultUILanguage": staticmethod(lambda: 1046)})()},
+        )()
+        with patch.object(autokeyboard.ctypes, "windll", mocked_windll, create=True):
+            with patch.object(autokeyboard.locale, "getlocale", return_value=("pt_BR", "cp1252")):
+                with patch.object(autokeyboard.locale, "getdefaultlocale", return_value=("pt_BR", "cp1252"), create=True):
+                    self.assertEqual(detect_system_language(), "pt-BR")
+
+    def test_returns_english_when_system_is_not_portuguese(self) -> None:
+        mocked_windll = type(
+            "MockWindll",
+            (),
+            {"kernel32": type("Kernel32", (), {"GetUserDefaultUILanguage": staticmethod(lambda: 1033)})()},
+        )()
+        with patch.object(autokeyboard.ctypes, "windll", mocked_windll, create=True):
+            with patch.object(autokeyboard.locale, "getlocale", return_value=("en_US", "cp1252")):
+                with patch.object(autokeyboard.locale, "getdefaultlocale", return_value=("en_US", "cp1252"), create=True):
+                    self.assertEqual(detect_system_language(), "en")
 
 
 if __name__ == "__main__":
