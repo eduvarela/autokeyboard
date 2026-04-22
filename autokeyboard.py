@@ -357,8 +357,8 @@ class AutoKeyboardApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Auto Keyboard")
-        self.root.geometry("820x610")
-        self.root.minsize(760, 560)
+        self.root.geometry("1360x860")
+        self.root.minsize(1180, 760)
 
         self.single_combo_var = tk.StringVar(value="F6")
         self.interval_var = tk.StringVar(value=str(DEFAULT_INTERVAL_MS))
@@ -368,7 +368,13 @@ class AutoKeyboardApp:
         self.step_combo_var = tk.StringVar()
         self.step_delay_var = tk.StringVar(value="500")
         self.status_var = tk.StringVar(value="Pronto para iniciar.")
-        self.mode_hint_var = tk.StringVar(value="Modo atual: tecla unica")
+        self.mode_hint_var = tk.StringVar(value="SINGLE KEY FALLBACK")
+        self.profile_name_var = tk.StringVar(value="Auto Keyboard")
+        self.profile_state_var = tk.StringVar(value="READY")
+        self.profile_meta_var = tk.StringVar(value="Precision automation profile")
+        self.actions_count_var = tk.StringVar(value="0")
+        self.cycle_time_var = tk.StringVar(value="0ms")
+        self.engine_mode_var = tk.StringVar(value="SCAN CODE")
 
         self.sequence_steps: list[SequenceStep] = []
         self.worker_thread: threading.Thread | None = None
@@ -380,135 +386,519 @@ class AutoKeyboardApp:
         self._build_layout()
         self._load_config()
         self._refresh_sequence_table()
+        self._refresh_dashboard_summary()
         self._poll_messages()
         self.root.protocol("WM_DELETE_WINDOW", self._handle_close)
 
+        for variable in (
+            self.single_combo_var,
+            self.interval_var,
+            self.start_delay_var,
+            self.sequence_pause_var,
+            self.use_scancodes_var,
+        ):
+            variable.trace_add("write", lambda *_args: self._refresh_dashboard_summary())
+
     def _build_styles(self) -> None:
+        self.colors = {
+            "background": "#081425",
+            "panel": "#152031",
+            "panel_high": "#1f2a3c",
+            "panel_line": "#2a3548",
+            "field": "#091527",
+            "text": "#d8e3fb",
+            "muted": "#93a1bd",
+            "subtle": "#6d7b98",
+            "accent": "#35c8bb",
+            "accent_soft": "#1f8f86",
+            "danger": "#93000a",
+            "danger_soft": "#c44751",
+            "outline": "#324156",
+        }
+        self.fonts = {
+            "brand": ("Space Grotesk", 18, "bold"),
+            "nav": ("Space Grotesk", 12, "bold"),
+            "headline": ("Space Grotesk", 18, "bold"),
+            "section": ("Space Grotesk", 11, "bold"),
+            "body": ("Inter", 12),
+            "body_bold": ("Inter", 12, "bold"),
+            "metric": ("Space Grotesk", 18, "bold"),
+            "mono": ("Space Grotesk", 12, "bold"),
+        }
+
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Root.TFrame", background="#f3efe7")
-        style.configure("Panel.TLabelframe", background="#f3efe7", borderwidth=1)
-        style.configure("Panel.TLabelframe.Label", background="#f3efe7", foreground="#2b2926")
-        style.configure("Body.TLabel", background="#f3efe7", foreground="#2b2926")
-        style.configure("Hint.TLabel", background="#f3efe7", foreground="#6d5f50")
-        style.configure("Accent.TButton", background="#1d6b57", foreground="#ffffff")
-        style.map("Accent.TButton", background=[("active", "#175544")])
+        self.root.configure(bg=self.colors["background"])
+
+        style.configure(
+            "Console.TEntry",
+            fieldbackground=self.colors["field"],
+            background=self.colors["field"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["outline"],
+            insertcolor=self.colors["accent"],
+            lightcolor=self.colors["outline"],
+            darkcolor=self.colors["outline"],
+            padding=10,
+        )
+        style.configure(
+            "Console.TCombobox",
+            fieldbackground=self.colors["field"],
+            background=self.colors["field"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["outline"],
+            arrowcolor=self.colors["accent"],
+            insertcolor=self.colors["accent"],
+            padding=8,
+        )
+        style.map(
+            "Console.TCombobox",
+            fieldbackground=[("readonly", self.colors["field"])],
+            selectbackground=[("readonly", self.colors["field"])],
+            selectforeground=[("readonly", self.colors["text"])],
+        )
+        style.configure(
+            "Console.Treeview",
+            background=self.colors["panel"],
+            fieldbackground=self.colors["panel"],
+            foreground=self.colors["text"],
+            rowheight=42,
+            borderwidth=0,
+            relief="flat",
+            font=self.fonts["body"],
+        )
+        style.configure(
+            "Console.Treeview.Heading",
+            background=self.colors["panel_high"],
+            foreground=self.colors["muted"],
+            borderwidth=0,
+            relief="flat",
+            font=self.fonts["section"],
+        )
+        style.map(
+            "Console.Treeview",
+            background=[("selected", self.colors["panel_line"])],
+            foreground=[("selected", self.colors["text"])],
+        )
+        style.configure(
+            "Primary.TButton",
+            background=self.colors["accent"],
+            foreground=self.colors["background"],
+            bordercolor=self.colors["accent_soft"],
+            lightcolor=self.colors["accent"],
+            darkcolor=self.colors["accent"],
+            padding=(28, 28),
+            font=self.fonts["nav"],
+        )
+        style.map("Primary.TButton", background=[("active", "#58e2d4")])
+        style.configure(
+            "Danger.TButton",
+            background=self.colors["danger"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["danger_soft"],
+            lightcolor=self.colors["danger"],
+            darkcolor=self.colors["danger"],
+            padding=(28, 28),
+            font=self.fonts["nav"],
+        )
+        style.map("Danger.TButton", background=[("active", "#b51523")])
+        style.configure(
+            "Ghost.TButton",
+            background=self.colors["panel_high"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["outline"],
+            lightcolor=self.colors["panel_high"],
+            darkcolor=self.colors["panel_high"],
+            padding=(14, 10),
+            font=self.fonts["section"],
+        )
+        style.map("Ghost.TButton", background=[("active", self.colors["panel_line"])])
+        style.configure(
+            "Slim.TButton",
+            background=self.colors["panel_high"],
+            foreground=self.colors["text"],
+            bordercolor=self.colors["outline"],
+            lightcolor=self.colors["panel_high"],
+            darkcolor=self.colors["panel_high"],
+            padding=(10, 8),
+            font=self.fonts["section"],
+        )
+        style.map("Slim.TButton", background=[("active", self.colors["panel_line"])])
+        style.configure(
+            "Console.TCheckbutton",
+            background=self.colors["panel"],
+            foreground=self.colors["text"],
+            font=self.fonts["body"],
+            indicatorcolor=self.colors["field"],
+            indicatordiameter=14,
+            bordercolor=self.colors["outline"],
+            focuscolor=self.colors["panel"],
+        )
+
+    def _create_panel(self, parent: tk.Misc, row: int, column: int, *, rowspan: int = 1, title: str, subtitle: str | None = None, sticky: str = "nsew") -> tk.Frame:
+        outer = tk.Frame(parent, bg=self.colors["outline"], bd=0, highlightthickness=0)
+        outer.grid(row=row, column=column, rowspan=rowspan, sticky=sticky, padx=6, pady=6)
+
+        panel = tk.Frame(outer, bg=self.colors["panel"], padx=20, pady=18)
+        panel.pack(fill="both", expand=True, padx=1, pady=1)
+
+        header = tk.Frame(panel, bg=self.colors["panel"])
+        header.pack(fill="x", pady=(0, 14))
+
+        tk.Label(
+            header,
+            text=title,
+            bg=self.colors["panel"],
+            fg=self.colors["muted"],
+            font=self.fonts["section"],
+        ).pack(anchor="w")
+
+        if subtitle:
+            tk.Label(
+                header,
+                text=subtitle,
+                bg=self.colors["panel"],
+                fg=self.colors["subtle"],
+                font=self.fonts["body"],
+            ).pack(anchor="w", pady=(4, 0))
+
+        return panel
+
+    def _create_metric_card(self, parent: tk.Misc, title: str, variable: tk.StringVar) -> None:
+        outer = tk.Frame(parent, bg=self.colors["outline"])
+        outer.pack(side="left", padx=(0, 12))
+
+        body = tk.Frame(outer, bg=self.colors["panel_high"], padx=18, pady=12)
+        body.pack(fill="both", expand=True, padx=1, pady=1)
+
+        tk.Label(
+            body,
+            text=title,
+            bg=self.colors["panel_high"],
+            fg=self.colors["subtle"],
+            font=self.fonts["section"],
+        ).pack(anchor="w")
+        tk.Label(
+            body,
+            textvariable=variable,
+            bg=self.colors["panel_high"],
+            fg=self.colors["accent"],
+            font=self.fonts["metric"],
+        ).pack(anchor="w", pady=(6, 0))
 
     def _build_layout(self) -> None:
-        container = ttk.Frame(self.root, style="Root.TFrame", padding=16)
-        container.pack(fill="both", expand=True)
-        container.columnconfigure(0, weight=1)
-        container.columnconfigure(1, weight=1)
-        container.rowconfigure(1, weight=1)
+        shell = tk.Frame(self.root, bg=self.colors["background"], padx=18, pady=16)
+        shell.pack(fill="both", expand=True)
+        shell.grid_columnconfigure(0, weight=3)
+        shell.grid_columnconfigure(1, weight=2)
+        shell.grid_rowconfigure(2, weight=1)
 
-        hero = ttk.Frame(container, style="Root.TFrame")
-        hero.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
-        hero.columnconfigure(0, weight=1)
+        nav = tk.Frame(shell, bg=self.colors["background"])
+        nav.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+        nav.grid_columnconfigure(1, weight=1)
 
-        ttk.Label(
-            hero,
+        brand = tk.Frame(nav, bg=self.colors["background"])
+        brand.grid(row=0, column=0, sticky="w")
+        tk.Label(
+            brand,
             text="Auto Keyboard",
-            font=("Segoe UI Semibold", 20),
-            style="Body.TLabel",
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            hero,
-            text=(
-                "Configure uma tecla repetida ou monte uma sequencia. "
-                "Depois de iniciar, troque o foco para o programa alvo durante a contagem."
-            ),
-            style="Hint.TLabel",
-            wraplength=760,
-        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+            bg=self.colors["background"],
+            fg=self.colors["accent"],
+            font=self.fonts["brand"],
+        ).pack(side="left")
+        tk.Label(
+            brand,
+            text="v1.0",
+            bg=self.colors["background"],
+            fg=self.colors["subtle"],
+            font=self.fonts["nav"],
+            padx=10,
+        ).pack(side="left")
 
-        config_panel = ttk.LabelFrame(container, text="Execucao rapida", style="Panel.TLabelframe", padding=14)
-        config_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
-        config_panel.columnconfigure(1, weight=1)
+        summary_outer = tk.Frame(shell, bg=self.colors["outline"])
+        summary_outer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12), padx=6)
+        summary = tk.Frame(summary_outer, bg=self.colors["panel_high"], padx=20, pady=18)
+        summary.pack(fill="both", expand=True, padx=1, pady=1)
+        summary.grid_columnconfigure(0, weight=1)
 
-        ttk.Label(config_panel, text="Tecla ou atalho", style="Body.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Combobox(
-            config_panel,
+        summary_left = tk.Frame(summary, bg=self.colors["panel_high"])
+        summary_left.grid(row=0, column=0, sticky="w")
+
+        profile_icon = tk.Canvas(summary_left, width=52, height=52, bg=self.colors["panel_high"], highlightthickness=0)
+        profile_icon.create_oval(4, 4, 48, 48, fill=self.colors["panel"], outline=self.colors["accent_soft"], width=2)
+        profile_icon.create_polygon(20, 16, 20, 36, 36, 26, fill=self.colors["accent"], outline="")
+        profile_icon.pack(side="left", padx=(0, 16))
+
+        profile_text = tk.Frame(summary_left, bg=self.colors["panel_high"])
+        profile_text.pack(side="left")
+        title_row = tk.Frame(profile_text, bg=self.colors["panel_high"])
+        title_row.pack(anchor="w")
+        tk.Label(
+            title_row,
+            textvariable=self.profile_name_var,
+            bg=self.colors["panel_high"],
+            fg=self.colors["text"],
+            font=("Space Grotesk", 20, "bold"),
+        ).pack(side="left")
+        self.profile_badge = tk.Label(
+            title_row,
+            textvariable=self.profile_state_var,
+            bg=self.colors["accent_soft"],
+            fg=self.colors["background"],
+            font=self.fonts["section"],
+            padx=10,
+            pady=4,
+        )
+        self.profile_badge.pack(side="left", padx=(10, 0))
+        tk.Label(
+            profile_text,
+            textvariable=self.profile_meta_var,
+            bg=self.colors["panel_high"],
+            fg=self.colors["muted"],
+            font=self.fonts["body"],
+        ).pack(anchor="w", pady=(6, 0))
+
+        metrics = tk.Frame(summary, bg=self.colors["panel_high"])
+        metrics.grid(row=0, column=1, sticky="e")
+        self._create_metric_card(metrics, "TOTAL ACTIONS", self.actions_count_var)
+        self._create_metric_card(metrics, "CYCLE TIME", self.cycle_time_var)
+
+        sequence_panel = self._create_panel(
+            shell,
+            row=2,
+            column=0,
+            rowspan=3,
+            title="SEQUENCE_BUILDER",
+            subtitle="Build and tune your key rotation sequence with hardware-style modules.",
+        )
+        sequence_panel.grid_rowconfigure(2, weight=1)
+        sequence_panel.grid_columnconfigure(0, weight=1)
+
+        sequence_header = tk.Frame(sequence_panel, bg=self.colors["panel"])
+        sequence_header.pack(fill="x", pady=(0, 10))
+        tk.Label(
+            sequence_header,
+            text="Sequence slots",
+            bg=self.colors["panel"],
+            fg=self.colors["text"],
+            font=self.fonts["headline"],
+        ).pack(side="left")
+        header_actions = tk.Frame(sequence_header, bg=self.colors["panel"])
+        header_actions.pack(side="right")
+        ttk.Button(header_actions, text="REMOVE", command=self._remove_selected_step, style="Slim.TButton").pack(side="right")
+        ttk.Button(header_actions, text="ADD ACTION", command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
+
+        editor_block = tk.Frame(sequence_panel, bg=self.colors["panel"])
+        editor_block.pack(fill="x", pady=(0, 12))
+        editor_block.grid_columnconfigure(0, weight=2)
+        editor_block.grid_columnconfigure(1, weight=1)
+
+        tk.Label(editor_block, text="KEY / HOTKEY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
+        tk.Label(editor_block, text="DELAY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+
+        self.step_combo_box = ttk.Combobox(
+            editor_block,
+            textvariable=self.step_combo_var,
+            values=KEY_COMBO_OPTIONS,
+            style="Console.TCombobox",
+        )
+        self.step_combo_box.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+
+        delay_field = tk.Frame(editor_block, bg=self.colors["outline"])
+        delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0))
+        delay_inner = tk.Frame(delay_field, bg=self.colors["field"])
+        delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        self.step_delay_entry = ttk.Entry(delay_inner, textvariable=self.step_delay_var, style="Console.TEntry")
+        self.step_delay_entry.pack(side="left", fill="x", expand=True)
+        tk.Label(delay_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+
+        self.sequence_table = ttk.Treeview(
+            sequence_panel,
+            columns=("order", "combo", "delay"),
+            show="headings",
+            height=11,
+            style="Console.Treeview",
+        )
+        self.sequence_table.heading("order", text="ID")
+        self.sequence_table.heading("combo", text="ACTION")
+        self.sequence_table.heading("delay", text="WAIT")
+        self.sequence_table.column("order", width=70, anchor="center")
+        self.sequence_table.column("combo", width=250, anchor="w")
+        self.sequence_table.column("delay", width=130, anchor="center")
+        self.sequence_table.pack(fill="both", expand=True)
+        self.sequence_table.bind("<<TreeviewSelect>>", self._populate_editor_from_selection)
+
+        action_bar = tk.Frame(sequence_panel, bg=self.colors["panel"])
+        action_bar.pack(fill="x", pady=(12, 0))
+        for index in range(6):
+            action_bar.grid_columnconfigure(index, weight=1)
+
+        ttk.Button(action_bar, text="ADD", command=self._add_step, style="Ghost.TButton").grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(action_bar, text="UPDATE", command=self._update_selected_step, style="Ghost.TButton").grid(row=0, column=1, sticky="ew", padx=6)
+        ttk.Button(action_bar, text="REMOVE", command=self._remove_selected_step, style="Ghost.TButton").grid(row=0, column=2, sticky="ew", padx=6)
+        ttk.Button(action_bar, text="UP", command=lambda: self._move_selected_step(-1), style="Slim.TButton").grid(row=0, column=3, sticky="ew", padx=6)
+        ttk.Button(action_bar, text="DOWN", command=lambda: self._move_selected_step(1), style="Slim.TButton").grid(row=0, column=4, sticky="ew", padx=6)
+        ttk.Button(action_bar, text="CLEAR", command=self._clear_sequence, style="Ghost.TButton").grid(row=0, column=5, sticky="ew", padx=(6, 0))
+
+        execution_panel = self._create_panel(
+            shell,
+            row=2,
+            column=1,
+            title="SYSTEM_EXECUTION",
+            subtitle="High-contrast controls with live engine telemetry.",
+        )
+
+        controls_row = tk.Frame(execution_panel, bg=self.colors["panel"])
+        controls_row.pack(fill="x", pady=(0, 14))
+        controls_row.grid_columnconfigure(0, weight=1)
+        controls_row.grid_columnconfigure(1, weight=1)
+
+        self.start_button = ttk.Button(controls_row, text="START", command=self.start, style="Primary.TButton")
+        self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.stop_button = ttk.Button(controls_row, text="STOP", command=self.stop, style="Danger.TButton")
+        self.stop_button.grid(row=0, column=1, sticky="ew")
+        self.stop_button.state(["disabled"])
+
+        status_strip = tk.Frame(execution_panel, bg=self.colors["field"], padx=14, pady=12)
+        status_strip.pack(fill="x")
+        self.status_led = tk.Canvas(status_strip, width=18, height=18, bg=self.colors["field"], highlightthickness=0)
+        self.status_led.pack(side="left")
+        self.status_led_dot = self.status_led.create_oval(4, 4, 14, 14, fill=self.colors["subtle"], outline="")
+        tk.Label(status_strip, textvariable=self.status_var, bg=self.colors["field"], fg=self.colors["text"], font=self.fonts["body"]).pack(side="left", padx=(8, 0))
+        tk.Label(status_strip, textvariable=self.engine_mode_var, bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["section"]).pack(side="right")
+
+        config_panel = self._create_panel(
+            shell,
+            row=3,
+            column=1,
+            title="CONFIG_PARAMETERS",
+            subtitle="Precision timing, fallback behavior, and compatibility settings.",
+        )
+
+        fields = tk.Frame(config_panel, bg=self.colors["panel"])
+        fields.pack(fill="x")
+        fields.grid_columnconfigure(0, weight=1)
+        fields.grid_columnconfigure(1, weight=1)
+
+        tk.Label(fields, text="GLOBAL INTERVAL", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
+        tk.Label(fields, text="INITIAL DELAY", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+
+        interval_field = tk.Frame(fields, bg=self.colors["outline"])
+        interval_field.grid(row=1, column=0, sticky="ew", pady=(8, 12))
+        interval_inner = tk.Frame(interval_field, bg=self.colors["field"])
+        interval_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        ttk.Entry(interval_inner, textvariable=self.interval_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
+        tk.Label(interval_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+
+        delay_field = tk.Frame(fields, bg=self.colors["outline"])
+        delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
+        delay_inner = tk.Frame(delay_field, bg=self.colors["field"])
+        delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        ttk.Entry(delay_inner, textvariable=self.start_delay_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
+        tk.Label(delay_inner, text="sec", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+
+        tk.Label(fields, text="SEQUENCE LOOP PAUSE", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=0, sticky="w")
+        tk.Label(fields, text="SINGLE KEY FALLBACK", bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=1, sticky="w", padx=(12, 0))
+
+        sequence_pause_field = tk.Frame(fields, bg=self.colors["outline"])
+        sequence_pause_field.grid(row=3, column=0, sticky="ew", pady=(8, 12))
+        sequence_pause_inner = tk.Frame(sequence_pause_field, bg=self.colors["field"])
+        sequence_pause_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        ttk.Entry(sequence_pause_inner, textvariable=self.sequence_pause_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
+        tk.Label(sequence_pause_inner, text="ms", bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
+
+        single_field = tk.Frame(fields, bg=self.colors["outline"])
+        single_field.grid(row=3, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
+        single_inner = tk.Frame(single_field, bg=self.colors["field"])
+        single_inner.pack(fill="both", expand=True, padx=1, pady=1)
+        self.single_combo_box = ttk.Combobox(
+            single_inner,
             textvariable=self.single_combo_var,
             values=KEY_COMBO_OPTIONS,
-        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
+            style="Console.TCombobox",
+        )
+        self.single_combo_box.pack(fill="x", expand=True)
 
-        ttk.Label(config_panel, text="Intervalo (ms)", style="Body.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(config_panel, textvariable=self.interval_var).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(10, 0))
-
-        ttk.Label(config_panel, text="Contagem inicial (s)", style="Body.TLabel").grid(row=2, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(config_panel, textvariable=self.start_delay_var).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(10, 0))
-
-        ttk.Label(config_panel, text="Pausa apos sequencia (ms)", style="Body.TLabel").grid(row=3, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(config_panel, textvariable=self.sequence_pause_var).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(10, 0))
-
-        ttk.Label(
-            config_panel,
-            text="Exemplos: A, space, enter, ctrl+s, alt+tab, f6",
-            style="Hint.TLabel",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
         ttk.Checkbutton(
             config_panel,
             text="Usar scan code (melhor para jogos)",
             variable=self.use_scancodes_var,
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
+            style="Console.TCheckbutton",
+        ).pack(anchor="w", pady=(8, 6))
 
-        sequence_panel = ttk.LabelFrame(container, text="Sequencia personalizada", style="Panel.TLabelframe", padding=14)
-        sequence_panel.grid(row=1, column=1, sticky="nsew", padx=(8, 0))
-        sequence_panel.columnconfigure(0, weight=1)
-        sequence_panel.rowconfigure(1, weight=1)
+        tk.Label(
+            config_panel,
+            textvariable=self.mode_hint_var,
+            bg=self.colors["panel"],
+            fg=self.colors["accent"],
+            font=self.fonts["section"],
+        ).pack(anchor="w")
 
-        editor = ttk.Frame(sequence_panel, style="Root.TFrame")
-        editor.grid(row=0, column=0, sticky="ew")
-        editor.columnconfigure(0, weight=2)
-        editor.columnconfigure(1, weight=1)
+        self._update_status_indicator(False)
 
-        ttk.Label(editor, text="Tecla ou atalho", style="Body.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(editor, text="Aguardar depois (ms)", style="Body.TLabel").grid(row=0, column=1, sticky="w", padx=(8, 0))
-        ttk.Combobox(
-            editor,
-            textvariable=self.step_combo_var,
-            values=KEY_COMBO_OPTIONS,
-        ).grid(row=1, column=0, sticky="ew", pady=(6, 0))
-        ttk.Entry(editor, textvariable=self.step_delay_var).grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+    def _save_profile(self) -> None:
+        self._save_config()
+        self.status_var.set("Perfil salvo no painel atual.")
 
-        action_bar = ttk.Frame(sequence_panel, style="Root.TFrame")
-        action_bar.grid(row=2, column=0, sticky="ew", pady=(10, 10))
-        for index in range(4):
-            action_bar.columnconfigure(index, weight=1)
+    def _move_selected_step(self, offset: int) -> None:
+        index = self._selected_index()
+        if index is None:
+            messagebox.showinfo("Mover passo", "Selecione um passo para mover.", parent=self.root)
+            return
 
-        ttk.Button(action_bar, text="Adicionar", command=self._add_step, style="Accent.TButton").grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        ttk.Button(action_bar, text="Atualizar", command=self._update_selected_step).grid(row=0, column=1, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="Remover", command=self._remove_selected_step).grid(row=0, column=2, sticky="ew", padx=6)
-        ttk.Button(action_bar, text="Limpar", command=self._clear_sequence).grid(row=0, column=3, sticky="ew", padx=(6, 0))
+        target_index = index + offset
+        if target_index < 0 or target_index >= len(self.sequence_steps):
+            return
 
-        self.sequence_table = ttk.Treeview(
-            sequence_panel,
-            columns=("combo", "delay"),
-            show="headings",
-            height=10,
+        self.sequence_steps[index], self.sequence_steps[target_index] = (
+            self.sequence_steps[target_index],
+            self.sequence_steps[index],
         )
-        self.sequence_table.heading("combo", text="Tecla / atalho")
-        self.sequence_table.heading("delay", text="Espera depois (ms)")
-        self.sequence_table.column("combo", width=220, anchor="w")
-        self.sequence_table.column("delay", width=120, anchor="center")
-        self.sequence_table.grid(row=1, column=0, sticky="nsew")
-        self.sequence_table.bind("<<TreeviewSelect>>", self._populate_editor_from_selection)
+        self._refresh_sequence_table()
+        self._save_config()
+        self._select_sequence_row(target_index)
 
-        bottom_panel = ttk.LabelFrame(container, text="Controle", style="Panel.TLabelframe", padding=14)
-        bottom_panel.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-        bottom_panel.columnconfigure(0, weight=1)
-        bottom_panel.columnconfigure(1, weight=1)
-        bottom_panel.columnconfigure(2, weight=1)
+    def _select_sequence_row(self, index: int) -> None:
+        children = self.sequence_table.get_children()
+        if index < 0 or index >= len(children):
+            return
+        item_id = children[index]
+        self.sequence_table.selection_set(item_id)
+        self.sequence_table.focus(item_id)
+        self.sequence_table.see(item_id)
 
-        ttk.Label(bottom_panel, textvariable=self.mode_hint_var, style="Body.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(bottom_panel, textvariable=self.status_var, style="Hint.TLabel", wraplength=540).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+    def _refresh_dashboard_summary(self) -> None:
+        if self.sequence_steps:
+            actions = len(self.sequence_steps)
+            cycle_ms = sum(step.delay_ms for step in self.sequence_steps)
+            try:
+                cycle_ms += parse_non_negative_int(self.sequence_pause_var.get().strip(), "Pausa apos sequencia")
+            except ValueError:
+                cycle_ms += 0
+            self.mode_hint_var.set("SEQUENCE MODE ACTIVE")
+        else:
+            actions = 1 if self.single_combo_var.get().strip() else 0
+            try:
+                cycle_ms = parse_non_negative_int(self.interval_var.get().strip(), "Intervalo")
+            except ValueError:
+                cycle_ms = 0
+            self.mode_hint_var.set("SINGLE KEY FALLBACK")
 
-        self.start_button = ttk.Button(bottom_panel, text="Iniciar", command=self.start, style="Accent.TButton")
-        self.start_button.grid(row=0, column=2, sticky="ew", padx=(12, 6))
+        self.actions_count_var.set(f"{actions:02d}")
+        self.cycle_time_var.set(f"{cycle_ms / 1000:.1f}s" if cycle_ms >= 1000 else f"{cycle_ms}ms")
+        mode_name = "SCAN CODE" if self.use_scancodes_var.get() else "VIRTUAL KEY"
+        self.engine_mode_var.set(mode_name)
+        combo_display = self.single_combo_var.get().strip() or "No fallback key"
+        self.profile_meta_var.set(f"{actions} action(s) configured • Fallback: {combo_display} • {mode_name}")
 
-        self.stop_button = ttk.Button(bottom_panel, text="Parar", command=self.stop)
-        self.stop_button.grid(row=1, column=2, sticky="ew", padx=(12, 6), pady=(8, 0))
-        self.stop_button.state(["disabled"])
+    def _update_status_indicator(self, running: bool) -> None:
+        led_color = self.colors["accent"] if running else self.colors["subtle"]
+        self.status_led.itemconfigure(self.status_led_dot, fill=led_color)
+        self.profile_state_var.set("ACTIVE" if running else "READY")
+        self.profile_badge.configure(
+            bg=self.colors["accent_soft"] if running else self.colors["outline"],
+            fg=self.colors["background"] if running else self.colors["text"],
+        )
 
     def _poll_messages(self) -> None:
         try:
@@ -528,6 +918,7 @@ class AutoKeyboardApp:
         else:
             self.start_button.state(["!disabled"])
             self.stop_button.state(["disabled"])
+        self._update_status_indicator(running)
 
     def _selected_index(self) -> int | None:
         selection = self.sequence_table.selection()
@@ -547,13 +938,10 @@ class AutoKeyboardApp:
         for item in self.sequence_table.get_children():
             self.sequence_table.delete(item)
 
-        for step in self.sequence_steps:
-            self.sequence_table.insert("", "end", values=(step.combo, step.delay_ms))
+        for index, step in enumerate(self.sequence_steps, start=1):
+            self.sequence_table.insert("", "end", values=(f"{index:02d}", step.combo, f"{step.delay_ms} ms"))
 
-        if self.sequence_steps:
-            self.mode_hint_var.set("Modo atual: sequencia personalizada")
-        else:
-            self.mode_hint_var.set("Modo atual: tecla unica")
+        self._refresh_dashboard_summary()
 
     def _validate_step_inputs(self) -> SequenceStep:
         combo = self.step_combo_var.get().strip()
@@ -718,7 +1106,11 @@ class AutoKeyboardApp:
         self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
         self.start_delay_var.set(str(payload.get("start_delay", self.start_delay_var.get())))
         self.sequence_pause_var.set(str(payload.get("sequence_pause", self.sequence_pause_var.get())))
-        self.use_scancodes_var.set(bool(payload.get("use_scancodes", self.use_scancodes_var.get())))
+        raw_use_scancodes = payload.get("use_scancodes", self.use_scancodes_var.get())
+        if isinstance(raw_use_scancodes, str):
+            self.use_scancodes_var.set(raw_use_scancodes.strip().lower() in {"1", "true", "yes", "on"})
+        else:
+            self.use_scancodes_var.set(bool(raw_use_scancodes))
 
         loaded_steps = []
         for raw_step in payload.get("sequence_steps", []):
