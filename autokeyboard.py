@@ -15,6 +15,7 @@ DEFAULT_START_DELAY = 3
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
 KEY_HOLD_SECONDS = 0.03
+DEFAULT_USE_SCANCODES = True
 KEY_COMBO_OPTIONS = (
     "A",
     "B",
@@ -201,6 +202,23 @@ def build_virtual_key_map() -> dict[str, int]:
 
 
 VIRTUAL_KEYS = build_virtual_key_map()
+EXTENDED_KEY_CODES = {
+    0x21,
+    0x22,
+    0x23,
+    0x24,
+    0x25,
+    0x26,
+    0x27,
+    0x28,
+    0x2D,
+    0x2E,
+    0x5B,
+    0x5C,
+    0x5D,
+    0x6F,
+    0x90,
+}
 
 
 def parse_key_combo(combo: str) -> list[int]:
@@ -290,17 +308,32 @@ class INPUT(ctypes.Structure):
 class KeySender:
     INPUT_KEYBOARD = 1
     KEYEVENTF_KEYUP = 0x0002
+    KEYEVENTF_EXTENDEDKEY = 0x0001
+    KEYEVENTF_SCANCODE = 0x0008
+    MAPVK_VK_TO_VSC = 0
 
     def __init__(self) -> None:
         self.user32 = ctypes.WinDLL("user32", use_last_error=True)
         self.user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int)
         self.user32.SendInput.restype = wintypes.UINT
+        self.user32.MapVirtualKeyW.argtypes = (wintypes.UINT, wintypes.UINT)
+        self.user32.MapVirtualKeyW.restype = wintypes.UINT
 
-    def _send_virtual_key(self, key_code: int, key_up: bool = False) -> None:
+    def _send_virtual_key(self, key_code: int, key_up: bool = False, use_scancodes: bool = False) -> None:
+        scan_code = 0
         flags = self.KEYEVENTF_KEYUP if key_up else 0
+
+        if use_scancodes:
+            scan_code = self.user32.MapVirtualKeyW(key_code, self.MAPVK_VK_TO_VSC)
+            if scan_code == 0:
+                raise OSError(f"Nao foi possivel mapear a tecla {key_code} para scan code.")
+            flags |= self.KEYEVENTF_SCANCODE
+            if key_code in EXTENDED_KEY_CODES:
+                flags |= self.KEYEVENTF_EXTENDEDKEY
+
         payload = KEYBDINPUT(
-            wVk=key_code,
-            wScan=0,
+            wVk=0 if use_scancodes else key_code,
+            wScan=scan_code,
             dwFlags=flags,
             time=0,
             dwExtraInfo=0,
@@ -311,13 +344,13 @@ class KeySender:
             error_code = ctypes.get_last_error()
             raise OSError(f"Falha ao enviar tecla para o Windows. Codigo: {error_code}")
 
-    def send_combo(self, combo: str) -> None:
+    def send_combo(self, combo: str, use_scancodes: bool = False) -> None:
         virtual_keys = parse_key_combo(combo)
         for key_code in virtual_keys:
-            self._send_virtual_key(key_code, key_up=False)
+            self._send_virtual_key(key_code, key_up=False, use_scancodes=use_scancodes)
         time.sleep(KEY_HOLD_SECONDS)
         for key_code in reversed(virtual_keys):
-            self._send_virtual_key(key_code, key_up=True)
+            self._send_virtual_key(key_code, key_up=True, use_scancodes=use_scancodes)
 
 
 class AutoKeyboardApp:
@@ -331,6 +364,7 @@ class AutoKeyboardApp:
         self.interval_var = tk.StringVar(value=str(DEFAULT_INTERVAL_MS))
         self.start_delay_var = tk.StringVar(value=str(DEFAULT_START_DELAY))
         self.sequence_pause_var = tk.StringVar(value=str(DEFAULT_SEQUENCE_PAUSE_MS))
+        self.use_scancodes_var = tk.BooleanVar(value=DEFAULT_USE_SCANCODES)
         self.step_combo_var = tk.StringVar()
         self.step_delay_var = tk.StringVar(value="500")
         self.status_var = tk.StringVar(value="Pronto para iniciar.")
@@ -412,6 +446,11 @@ class AutoKeyboardApp:
             text="Exemplos: A, space, enter, ctrl+s, alt+tab, f6",
             style="Hint.TLabel",
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ttk.Checkbutton(
+            config_panel,
+            text="Usar scan code (melhor para jogos)",
+            variable=self.use_scancodes_var,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
         sequence_panel = ttk.LabelFrame(container, text="Sequencia personalizada", style="Panel.TLabelframe", padding=14)
         sequence_panel.grid(row=1, column=1, sticky="nsew", padx=(8, 0))
@@ -570,26 +609,27 @@ class AutoKeyboardApp:
         self._save_config()
         self.status_var.set("Sequencia limpa. O app voltou para o modo de tecla unica.")
 
-    def _validate_run_inputs(self) -> tuple[str, int, int, int, list[SequenceStep]]:
+    def _validate_run_inputs(self) -> tuple[str, int, int, int, bool, list[SequenceStep]]:
         combo = self.single_combo_var.get().strip()
         interval_ms = parse_non_negative_int(self.interval_var.get().strip(), "Intervalo")
         start_delay = parse_non_negative_int(self.start_delay_var.get().strip(), "Contagem inicial")
         sequence_pause = parse_non_negative_int(self.sequence_pause_var.get().strip(), "Pausa apos sequencia")
+        use_scancodes = self.use_scancodes_var.get()
 
         if self.sequence_steps:
             for step in self.sequence_steps:
                 parse_key_combo(step.combo)
-            return combo, interval_ms, start_delay, sequence_pause, list(self.sequence_steps)
+            return combo, interval_ms, start_delay, sequence_pause, use_scancodes, list(self.sequence_steps)
 
         parse_key_combo(combo)
-        return combo, interval_ms, start_delay, sequence_pause, []
+        return combo, interval_ms, start_delay, sequence_pause, use_scancodes, []
 
     def start(self) -> None:
         if self.worker_thread and self.worker_thread.is_alive():
             return
 
         try:
-            combo, interval_ms, start_delay, sequence_pause, sequence_steps = self._validate_run_inputs()
+            combo, interval_ms, start_delay, sequence_pause, use_scancodes, sequence_steps = self._validate_run_inputs()
         except ValueError as exc:
             messagebox.showerror("Configuracao invalida", str(exc), parent=self.root)
             return
@@ -597,10 +637,11 @@ class AutoKeyboardApp:
         self._save_config()
         self.stop_event.clear()
         self._set_running(True)
-        self.messages.put(("info", "Automacao iniciada. Troque o foco para a janela alvo durante a contagem."))
+        mode_label = "scan code" if use_scancodes else "virtual key"
+        self.messages.put(("info", f"Automacao iniciada em modo {mode_label}. Troque o foco para a janela alvo durante a contagem."))
         self.worker_thread = threading.Thread(
             target=self._run_worker,
-            args=(combo, interval_ms, start_delay, sequence_pause, sequence_steps),
+            args=(combo, interval_ms, start_delay, sequence_pause, use_scancodes, sequence_steps),
             daemon=True,
         )
         self.worker_thread.start()
@@ -615,6 +656,7 @@ class AutoKeyboardApp:
         interval_ms: int,
         start_delay: int,
         sequence_pause: int,
+        use_scancodes: bool,
         sequence_steps: list[SequenceStep],
     ) -> None:
         try:
@@ -625,10 +667,11 @@ class AutoKeyboardApp:
                     return
 
             if sequence_steps:
-                self.messages.put(("info", "Sequencia em execucao."))
+                mode_label = "scan code" if use_scancodes else "virtual key"
+                self.messages.put(("info", f"Sequencia em execucao ({mode_label})."))
                 while not self.stop_event.is_set():
                     for step in sequence_steps:
-                        self.sender.send_combo(step.combo)
+                        self.sender.send_combo(step.combo, use_scancodes=use_scancodes)
                         if not sleep_interruptible(step.delay_ms / 1000, self.stop_event):
                             self.messages.put(("stopped", "Automacao interrompida."))
                             return
@@ -636,9 +679,10 @@ class AutoKeyboardApp:
                         self.messages.put(("stopped", "Automacao interrompida."))
                         return
             else:
-                self.messages.put(("info", f"Tecla '{combo}' em repeticao."))
+                mode_label = "scan code" if use_scancodes else "virtual key"
+                self.messages.put(("info", f"Tecla '{combo}' em repeticao ({mode_label})."))
                 while not self.stop_event.is_set():
-                    self.sender.send_combo(combo)
+                    self.sender.send_combo(combo, use_scancodes=use_scancodes)
                     if not sleep_interruptible(interval_ms / 1000, self.stop_event):
                         self.messages.put(("stopped", "Automacao interrompida."))
                         return
@@ -655,6 +699,7 @@ class AutoKeyboardApp:
             "interval_ms": self.interval_var.get().strip(),
             "start_delay": self.start_delay_var.get().strip(),
             "sequence_pause": self.sequence_pause_var.get().strip(),
+            "use_scancodes": self.use_scancodes_var.get(),
             "sequence_steps": [asdict(step) for step in self.sequence_steps],
         }
         CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -673,6 +718,7 @@ class AutoKeyboardApp:
         self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
         self.start_delay_var.set(str(payload.get("start_delay", self.start_delay_var.get())))
         self.sequence_pause_var.set(str(payload.get("sequence_pause", self.sequence_pause_var.get())))
+        self.use_scancodes_var.set(bool(payload.get("use_scancodes", self.use_scancodes_var.get())))
 
         loaded_steps = []
         for raw_step in payload.get("sequence_steps", []):
