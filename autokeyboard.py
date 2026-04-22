@@ -701,6 +701,11 @@ class AutoKeyboardApp:
         style = ttk.Style()
         style.theme_use("clam")
         self.root.configure(bg=self.colors["background"])
+        self.root.option_add("*TCombobox*Listbox.background", self.colors["field"])
+        self.root.option_add("*TCombobox*Listbox.foreground", self.colors["text"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", self.colors["panel_line"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", self.colors["text"])
+        self.root.option_add("*TCombobox*Listbox.borderWidth", 0)
 
         style.configure(
             "Console.TEntry",
@@ -721,13 +726,16 @@ class AutoKeyboardApp:
             bordercolor=self.colors["outline"],
             lightcolor=self.colors["outline"],
             darkcolor=self.colors["outline"],
+            arrowbackground=self.colors["field"],
             arrowcolor=self.colors["accent"],
             insertcolor=self.colors["accent"],
             padding=8,
         )
         style.map(
             "Console.TCombobox",
-            fieldbackground=[("readonly", self.colors["field"])],
+            background=[("active", self.colors["field"]), ("pressed", self.colors["field"])],
+            fieldbackground=[("active", self.colors["field"]), ("pressed", self.colors["field"]), ("readonly", self.colors["field"])],
+            arrowbackground=[("active", self.colors["field"]), ("pressed", self.colors["field"]), ("readonly", self.colors["field"])],
             selectbackground=[("readonly", self.colors["field"])],
             selectforeground=[("readonly", self.colors["text"])],
         )
@@ -752,6 +760,11 @@ class AutoKeyboardApp:
             borderwidth=0,
             relief="flat",
             font=self.fonts["section"],
+        )
+        style.map(
+            "Console.Treeview.Heading",
+            background=[("active", self.colors["panel_line"])],
+            foreground=[("active", self.colors["text"])],
         )
         style.map(
             "Console.Treeview",
