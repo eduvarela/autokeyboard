@@ -1404,6 +1404,12 @@ class AutoKeyboardApp:
             return None
         return self.sequence_table.index(selection[0])
 
+    def _selected_indices(self) -> list[int]:
+        selection = self.sequence_table.selection()
+        if not selection:
+            return []
+        return sorted((self.sequence_table.index(item_id) for item_id in selection), reverse=True)
+
     def _populate_editor_from_selection(self, _event: object | None = None) -> None:
         index = self._selected_index()
         if index is None:
@@ -1459,12 +1465,13 @@ class AutoKeyboardApp:
         self.status_var.set(tr("status.step_updated"))
 
     def _remove_selected_step(self) -> None:
-        index = self._selected_index()
-        if index is None:
+        indices = self._selected_indices()
+        if not indices:
             messagebox.showinfo(tr("dialogs.remove_title"), tr("dialogs.remove_select"), parent=self.root)
             return
 
-        del self.sequence_steps[index]
+        for index in indices:
+            del self.sequence_steps[index]
         self._refresh_sequence_table()
         self._save_config()
         self.status_var.set(tr("status.step_removed"))
