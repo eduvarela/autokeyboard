@@ -1081,6 +1081,15 @@ class AutoKeyboardApp:
             )
             button.pack(side="right", padx=(8, 0))
 
+    def _apply_button_cursors(self, parent: tk.Misc) -> None:
+        for child in parent.winfo_children():
+            if isinstance(child, (ttk.Button, tk.Button, ttk.Combobox)):
+                try:
+                    child.configure(cursor="hand2")
+                except tk.TclError:
+                    pass
+            self._apply_button_cursors(child)
+
     def _rebuild_ui(self) -> None:
         running = self.worker_thread is not None and self.worker_thread.is_alive()
         self.root.title(tr("app.title"))
@@ -1469,6 +1478,7 @@ class AutoKeyboardApp:
 
         self._update_status_indicator(False)
         self._apply_action_bar_layout(False)
+        self._apply_button_cursors(self.root)
 
     def _handle_root_configure(self, event: tk.Event) -> None:
         if event.widget is not self.root:
