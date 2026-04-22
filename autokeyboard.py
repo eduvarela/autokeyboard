@@ -964,7 +964,7 @@ class AutoKeyboardApp:
         ttk.Button(nav_actions, text=tr("labels.button_export"), command=self._export_profile, style="Slim.TButton").pack(side="left")
 
         language_switcher = tk.Frame(nav, bg=self.colors["background"])
-        language_switcher.grid(row=0, column=3, sticky="e")
+        language_switcher.grid(row=0, column=3, sticky="e", padx=(0, 6))
         self._build_language_switcher(language_switcher)
 
         summary_outer = tk.Frame(shell, bg=self.colors["outline"])
