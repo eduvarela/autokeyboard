@@ -776,45 +776,161 @@ class AutoKeyboardApp:
             background=self.colors["accent"],
             foreground=self.colors["background"],
             bordercolor=self.colors["accent_soft"],
+            focuscolor=self.colors["accent"],
             lightcolor=self.colors["accent"],
             darkcolor=self.colors["accent"],
             padding=(28, 28),
             font=self.fonts["nav"],
         )
-        style.map("Primary.TButton", background=[("active", "#58e2d4")])
+        style.map(
+            "Primary.TButton",
+            background=[("disabled", self.colors["panel_line"]), ("active", "#58e2d4")],
+            foreground=[("disabled", self.colors["text"])],
+            bordercolor=[("disabled", self.colors["outline"])],
+            lightcolor=[("disabled", self.colors["panel_line"])],
+            darkcolor=[("disabled", self.colors["panel_line"])],
+        )
         style.configure(
             "Danger.TButton",
             background=self.colors["danger"],
             foreground=self.colors["text"],
             bordercolor=self.colors["danger_soft"],
+            focuscolor=self.colors["danger"],
             lightcolor=self.colors["danger"],
             darkcolor=self.colors["danger"],
             padding=(28, 28),
             font=self.fonts["nav"],
         )
-        style.map("Danger.TButton", background=[("active", "#b51523")])
+        style.map(
+            "Danger.TButton",
+            background=[("disabled", self.colors["panel_line"]), ("active", "#b51523")],
+            foreground=[("disabled", self.colors["text"])],
+            bordercolor=[("disabled", self.colors["outline"])],
+            lightcolor=[("disabled", self.colors["panel_line"])],
+            darkcolor=[("disabled", self.colors["panel_line"])],
+        )
         style.configure(
             "Ghost.TButton",
             background=self.colors["panel_high"],
             foreground=self.colors["text"],
             bordercolor=self.colors["outline"],
+            focuscolor=self.colors["panel_high"],
             lightcolor=self.colors["panel_high"],
             darkcolor=self.colors["panel_high"],
             padding=(14, 10),
             font=self.fonts["section"],
         )
-        style.map("Ghost.TButton", background=[("active", self.colors["panel_line"])])
+        style.map(
+            "Ghost.TButton",
+            background=[("disabled", self.colors["panel_line"]), ("active", self.colors["panel_line"])],
+            foreground=[("disabled", self.colors["text"])],
+            bordercolor=[("disabled", self.colors["outline"])],
+            lightcolor=[("disabled", self.colors["panel_line"])],
+            darkcolor=[("disabled", self.colors["panel_line"])],
+        )
         style.configure(
             "Slim.TButton",
             background=self.colors["panel_high"],
             foreground=self.colors["text"],
             bordercolor=self.colors["outline"],
+            focuscolor=self.colors["panel_high"],
             lightcolor=self.colors["panel_high"],
             darkcolor=self.colors["panel_high"],
             padding=(10, 8),
             font=self.fonts["section"],
         )
-        style.map("Slim.TButton", background=[("active", self.colors["panel_line"])])
+        style.map(
+            "Slim.TButton",
+            background=[("disabled", self.colors["panel_line"]), ("active", self.colors["panel_line"])],
+            foreground=[("disabled", self.colors["text"])],
+            bordercolor=[("disabled", self.colors["outline"])],
+            lightcolor=[("disabled", self.colors["panel_line"])],
+            darkcolor=[("disabled", self.colors["panel_line"])],
+        )
+        style.layout(
+            "Primary.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.layout(
+            "Danger.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.layout(
+            "Ghost.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.layout(
+            "Slim.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
         style.configure(
             "Console.TCheckbutton",
             background=self.colors["panel"],
