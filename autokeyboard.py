@@ -670,7 +670,7 @@ class AutoKeyboardApp:
         self.root = root
         self.root.title(tr("app.title"))
         self.root.geometry("1360x860")
-        self.root.minsize(920, 680)
+        self.root.minsize(920, 860)
 
         self.single_combo_var = tk.StringVar(value="F6")
         self.interval_var = tk.StringVar(value=str(DEFAULT_INTERVAL_MS))
