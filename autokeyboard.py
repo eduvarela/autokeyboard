@@ -678,6 +678,7 @@ class AutoKeyboardApp:
             "panel_high": "#1f2a3c",
             "panel_line": "#2a3548",
             "field": "#091527",
+            "disabled_button": "#0d1624",
             "text": "#d8e3fb",
             "muted": "#93a1bd",
             "subtle": "#6d7b98",
@@ -784,11 +785,11 @@ class AutoKeyboardApp:
         )
         style.map(
             "Primary.TButton",
-            background=[("disabled", self.colors["panel_line"]), ("active", "#58e2d4")],
+            background=[("disabled", self.colors["disabled_button"]), ("active", "#58e2d4")],
             foreground=[("disabled", self.colors["text"])],
             bordercolor=[("disabled", self.colors["outline"])],
-            lightcolor=[("disabled", self.colors["panel_line"])],
-            darkcolor=[("disabled", self.colors["panel_line"])],
+            lightcolor=[("disabled", self.colors["disabled_button"])],
+            darkcolor=[("disabled", self.colors["disabled_button"])],
         )
         style.configure(
             "Danger.TButton",
@@ -803,11 +804,11 @@ class AutoKeyboardApp:
         )
         style.map(
             "Danger.TButton",
-            background=[("disabled", self.colors["panel_line"]), ("active", "#b51523")],
+            background=[("disabled", self.colors["disabled_button"]), ("active", "#b51523")],
             foreground=[("disabled", self.colors["text"])],
             bordercolor=[("disabled", self.colors["outline"])],
-            lightcolor=[("disabled", self.colors["panel_line"])],
-            darkcolor=[("disabled", self.colors["panel_line"])],
+            lightcolor=[("disabled", self.colors["disabled_button"])],
+            darkcolor=[("disabled", self.colors["disabled_button"])],
         )
         style.configure(
             "Ghost.TButton",
@@ -822,11 +823,11 @@ class AutoKeyboardApp:
         )
         style.map(
             "Ghost.TButton",
-            background=[("disabled", self.colors["panel_line"]), ("active", self.colors["panel_line"])],
+            background=[("disabled", self.colors["disabled_button"]), ("active", self.colors["panel_line"])],
             foreground=[("disabled", self.colors["text"])],
             bordercolor=[("disabled", self.colors["outline"])],
-            lightcolor=[("disabled", self.colors["panel_line"])],
-            darkcolor=[("disabled", self.colors["panel_line"])],
+            lightcolor=[("disabled", self.colors["disabled_button"])],
+            darkcolor=[("disabled", self.colors["disabled_button"])],
         )
         style.configure(
             "Slim.TButton",
@@ -841,11 +842,11 @@ class AutoKeyboardApp:
         )
         style.map(
             "Slim.TButton",
-            background=[("disabled", self.colors["panel_line"]), ("active", self.colors["panel_line"])],
+            background=[("disabled", self.colors["disabled_button"]), ("active", self.colors["panel_line"])],
             foreground=[("disabled", self.colors["text"])],
             bordercolor=[("disabled", self.colors["outline"])],
-            lightcolor=[("disabled", self.colors["panel_line"])],
-            darkcolor=[("disabled", self.colors["panel_line"])],
+            lightcolor=[("disabled", self.colors["disabled_button"])],
+            darkcolor=[("disabled", self.colors["disabled_button"])],
         )
         style.layout(
             "Primary.TButton",
@@ -983,6 +984,12 @@ class AutoKeyboardApp:
             bordercolor=self.colors["outline"],
             focuscolor=self.colors["panel"],
         )
+        style.map(
+            "Console.TCheckbutton",
+            background=[("active", self.colors["panel"])],
+            foreground=[("active", self.colors["text"])],
+            indicatorbackground=[("active", self.colors["field"])],
+        )
 
     def _load_language_image(self, language_code: str) -> tk.PhotoImage | None:
         image_path = LANGUAGE_ASSETS.get(language_code)
@@ -1020,6 +1027,10 @@ class AutoKeyboardApp:
                 activeforeground=self.colors["text"],
                 relief="flat",
                 bd=0,
+                highlightthickness=0,
+                highlightbackground=self.colors["background"],
+                highlightcolor=self.colors["background"],
+                takefocus=0,
                 padx=8,
                 pady=6,
                 cursor="hand2",
