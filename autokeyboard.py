@@ -625,10 +625,12 @@ class AutoKeyboardApp:
         load_app_strings()
         self.current_language = CURRENT_LANGUAGE
         self.language_images: dict[str, tk.PhotoImage] = {}
+        self._responsive_mode = ""
+        self._resize_after_id: str | None = None
         self.root = root
         self.root.title(tr("app.title"))
         self.root.geometry("1360x860")
-        self.root.minsize(1180, 760)
+        self.root.minsize(920, 680)
 
         self.single_combo_var = tk.StringVar(value="F6")
         self.interval_var = tk.StringVar(value=str(DEFAULT_INTERVAL_MS))
@@ -660,6 +662,8 @@ class AutoKeyboardApp:
         self._refresh_sequence_table()
         self._refresh_dashboard_summary()
         self._poll_messages()
+        self.root.bind("<Configure>", self._handle_root_configure)
+        self.root.after_idle(lambda: self._apply_responsive_layout(force=True))
         self.root.protocol("WM_DELETE_WINDOW", self._handle_close)
 
         for variable in (
@@ -1048,6 +1052,7 @@ class AutoKeyboardApp:
         self._refresh_sequence_table()
         self._refresh_dashboard_summary()
         self._set_running(running)
+        self.root.after_idle(lambda: self._apply_responsive_layout(force=True))
 
     def _set_language(self, language_code: str) -> None:
         if language_code == self.current_language:
@@ -1064,7 +1069,17 @@ class AutoKeyboardApp:
         self._rebuild_ui()
         self._save_config()
 
-    def _create_panel(self, parent: tk.Misc, row: int, column: int, *, rowspan: int = 1, title: str, subtitle: str | None = None, sticky: str = "nsew") -> tk.Frame:
+    def _create_panel(
+        self,
+        parent: tk.Misc,
+        row: int,
+        column: int,
+        *,
+        rowspan: int = 1,
+        title: str,
+        subtitle: str | None = None,
+        sticky: str = "nsew",
+    ) -> tuple[tk.Frame, tk.Frame, tk.Label | None]:
         outer = tk.Frame(parent, bg=self.colors["outline"], bd=0, highlightthickness=0)
         outer.grid(row=row, column=column, rowspan=rowspan, sticky=sticky, padx=6, pady=6)
 
@@ -1082,20 +1097,23 @@ class AutoKeyboardApp:
             font=self.fonts["section"],
         ).pack(anchor="w")
 
+        subtitle_label = None
         if subtitle:
-            tk.Label(
+            subtitle_label = tk.Label(
                 header,
                 text=subtitle,
                 bg=self.colors["panel"],
                 fg=self.colors["subtle"],
                 font=self.fonts["body"],
-            ).pack(anchor="w", pady=(4, 0))
+                justify="left",
+            )
+            subtitle_label.pack(anchor="w", pady=(4, 0))
 
-        return panel
+        return outer, panel, subtitle_label
 
-    def _create_metric_card(self, parent: tk.Misc, title: str, variable: tk.StringVar) -> None:
+    def _create_metric_card(self, parent: tk.Misc, title: str, variable: tk.StringVar, column: int) -> tk.Frame:
         outer = tk.Frame(parent, bg=self.colors["outline"])
-        outer.pack(side="left", padx=(0, 12))
+        outer.grid(row=0, column=column, sticky="ew", padx=(0, 12 if column == 0 else 0))
 
         body = tk.Frame(outer, bg=self.colors["panel_high"], padx=18, pady=12)
         body.pack(fill="both", expand=True, padx=1, pady=1)
@@ -1114,31 +1132,32 @@ class AutoKeyboardApp:
             fg=self.colors["accent"],
             font=self.fonts["metric"],
         ).pack(anchor="w", pady=(6, 0))
+        return outer
 
     def _build_layout(self) -> None:
-        shell = tk.Frame(self.root, bg=self.colors["background"], padx=18, pady=16)
-        shell.pack(fill="both", expand=True)
-        shell.grid_columnconfigure(0, weight=3)
-        shell.grid_columnconfigure(1, weight=2)
-        shell.grid_rowconfigure(2, weight=1)
+        self.shell = tk.Frame(self.root, bg=self.colors["background"], padx=18, pady=16)
+        self.shell.pack(fill="both", expand=True)
+        self.shell.grid_columnconfigure(0, weight=3)
+        self.shell.grid_columnconfigure(1, weight=2)
+        self.shell.grid_rowconfigure(2, weight=1)
 
-        nav = tk.Frame(shell, bg=self.colors["background"])
-        nav.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
-        nav.grid_columnconfigure(1, weight=1)
-        nav.grid_columnconfigure(2, weight=0)
-        nav.grid_columnconfigure(3, weight=0)
+        self.nav = tk.Frame(self.shell, bg=self.colors["background"])
+        self.nav.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+        self.nav.grid_columnconfigure(1, weight=1)
+        self.nav.grid_columnconfigure(2, weight=0)
+        self.nav.grid_columnconfigure(3, weight=0)
 
-        brand = tk.Frame(nav, bg=self.colors["background"])
-        brand.grid(row=0, column=0, sticky="w")
+        self.brand = tk.Frame(self.nav, bg=self.colors["background"])
+        self.brand.grid(row=0, column=0, sticky="w")
         tk.Label(
-            brand,
+            self.brand,
             text=tr("labels.brand"),
             bg=self.colors["background"],
             fg=self.colors["accent"],
             font=self.fonts["brand"],
         ).pack(side="left")
         tk.Label(
-            brand,
+            self.brand,
             text=tr("app.version"),
             bg=self.colors["background"],
             fg=self.colors["subtle"],
@@ -1146,35 +1165,36 @@ class AutoKeyboardApp:
             padx=10,
         ).pack(side="left")
 
-        nav_actions = tk.Frame(nav, bg=self.colors["background"])
-        nav_actions.grid(row=0, column=2, sticky="e", padx=(0, 12))
-        ttk.Button(nav_actions, text=tr("labels.button_import"), command=self._import_profile, style="Slim.TButton").pack(side="left", padx=(0, 8))
-        ttk.Button(nav_actions, text=tr("labels.button_export"), command=self._export_profile, style="Slim.TButton").pack(side="left")
+        self.nav_actions = tk.Frame(self.nav, bg=self.colors["background"])
+        self.nav_actions.grid(row=0, column=2, sticky="e", padx=(0, 12))
+        ttk.Button(self.nav_actions, text=tr("labels.button_import"), command=self._import_profile, style="Slim.TButton").pack(side="left", padx=(0, 8))
+        ttk.Button(self.nav_actions, text=tr("labels.button_export"), command=self._export_profile, style="Slim.TButton").pack(side="left")
 
-        language_switcher = tk.Frame(nav, bg=self.colors["background"])
-        language_switcher.grid(row=0, column=3, sticky="e", padx=(0, 6))
-        self._build_language_switcher(language_switcher)
+        self.language_switcher = tk.Frame(self.nav, bg=self.colors["background"])
+        self.language_switcher.grid(row=0, column=3, sticky="e", padx=(0, 6))
+        self._build_language_switcher(self.language_switcher)
 
-        summary_outer = tk.Frame(shell, bg=self.colors["outline"])
-        summary_outer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12), padx=6)
-        summary = tk.Frame(summary_outer, bg=self.colors["panel_high"], padx=20, pady=18)
-        summary.pack(fill="both", expand=True, padx=1, pady=1)
-        summary.grid_columnconfigure(0, weight=1)
+        self.summary_outer = tk.Frame(self.shell, bg=self.colors["outline"])
+        self.summary_outer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12), padx=6)
+        self.summary = tk.Frame(self.summary_outer, bg=self.colors["panel_high"], padx=20, pady=18)
+        self.summary.pack(fill="both", expand=True, padx=1, pady=1)
+        self.summary.grid_columnconfigure(0, weight=1)
+        self.summary.grid_columnconfigure(1, weight=0)
 
-        summary_left = tk.Frame(summary, bg=self.colors["panel_high"])
-        summary_left.grid(row=0, column=0, sticky="w")
+        self.summary_left = tk.Frame(self.summary, bg=self.colors["panel_high"])
+        self.summary_left.grid(row=0, column=0, sticky="w")
 
-        profile_icon = tk.Canvas(summary_left, width=52, height=52, bg=self.colors["panel_high"], highlightthickness=0)
+        profile_icon = tk.Canvas(self.summary_left, width=52, height=52, bg=self.colors["panel_high"], highlightthickness=0)
         profile_icon.create_oval(4, 4, 48, 48, fill=self.colors["panel"], outline=self.colors["accent_soft"], width=2)
         profile_icon.create_polygon(20, 16, 20, 36, 36, 26, fill=self.colors["accent"], outline="")
         profile_icon.pack(side="left", padx=(0, 16))
 
-        profile_text = tk.Frame(summary_left, bg=self.colors["panel_high"])
-        profile_text.pack(side="left")
-        title_row = tk.Frame(profile_text, bg=self.colors["panel_high"])
-        title_row.pack(anchor="w")
+        self.profile_text = tk.Frame(self.summary_left, bg=self.colors["panel_high"])
+        self.profile_text.pack(side="left", fill="x", expand=True)
+        self.title_row = tk.Frame(self.profile_text, bg=self.colors["panel_high"])
+        self.title_row.pack(anchor="w")
         self.profile_name_label = tk.Label(
-            title_row,
+            self.title_row,
             textvariable=self.profile_name_var,
             bg=self.colors["panel_high"],
             fg=self.colors["text"],
@@ -1185,12 +1205,12 @@ class AutoKeyboardApp:
         self.profile_name_label.bind("<Button-1>", self._begin_profile_name_edit)
 
         self.profile_name_entry_var.set(self.profile_name_var.get())
-        self.profile_name_entry = ttk.Entry(title_row, textvariable=self.profile_name_entry_var, style="Console.TEntry")
+        self.profile_name_entry = ttk.Entry(self.title_row, textvariable=self.profile_name_entry_var, style="Console.TEntry")
         self.profile_name_entry.bind("<Return>", self._commit_profile_name_edit)
         self.profile_name_entry.bind("<Escape>", self._cancel_profile_name_edit)
         self.profile_name_entry.bind("<FocusOut>", self._commit_profile_name_edit)
         self.profile_badge = tk.Label(
-            title_row,
+            self.title_row,
             textvariable=self.profile_state_var,
             bg=self.colors["accent_soft"],
             fg=self.colors["background"],
@@ -1199,21 +1219,27 @@ class AutoKeyboardApp:
             pady=4,
         )
         self.profile_badge.pack(side="left", padx=(10, 0))
-        tk.Label(
-            profile_text,
+        self.profile_meta_label = tk.Label(
+            self.profile_text,
             textvariable=self.profile_meta_var,
             bg=self.colors["panel_high"],
             fg=self.colors["muted"],
             font=self.fonts["body"],
-        ).pack(anchor="w", pady=(6, 0))
+            justify="left",
+        )
+        self.profile_meta_label.pack(anchor="w", pady=(6, 0), fill="x")
 
-        metrics = tk.Frame(summary, bg=self.colors["panel_high"])
-        metrics.grid(row=0, column=1, sticky="e")
-        self._create_metric_card(metrics, tr("labels.metric_actions"), self.actions_count_var)
-        self._create_metric_card(metrics, tr("labels.metric_cycle"), self.cycle_time_var)
+        self.metrics = tk.Frame(self.summary, bg=self.colors["panel_high"])
+        self.metrics.grid(row=0, column=1, sticky="e")
+        self.metrics.grid_columnconfigure(0, weight=1)
+        self.metrics.grid_columnconfigure(1, weight=1)
+        self.metric_cards = [
+            self._create_metric_card(self.metrics, tr("labels.metric_actions"), self.actions_count_var, 0),
+            self._create_metric_card(self.metrics, tr("labels.metric_cycle"), self.cycle_time_var, 1),
+        ]
 
-        sequence_panel = self._create_panel(
-            shell,
+        self.sequence_panel_outer, sequence_panel, self.sequence_subtitle_label = self._create_panel(
+            self.shell,
             row=2,
             column=0,
             rowspan=3,
@@ -1232,22 +1258,24 @@ class AutoKeyboardApp:
             fg=self.colors["text"],
             font=self.fonts["headline"],
         ).pack(side="left")
-        header_actions = tk.Frame(sequence_header, bg=self.colors["panel"])
-        header_actions.pack(side="right")
-        ttk.Button(header_actions, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton").pack(side="right")
-        ttk.Button(header_actions, text=tr("labels.button_add_action"), command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
+        self.header_actions = tk.Frame(sequence_header, bg=self.colors["panel"])
+        self.header_actions.pack(side="right")
+        ttk.Button(self.header_actions, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton").pack(side="right")
+        ttk.Button(self.header_actions, text=tr("labels.button_add_action"), command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
 
-        editor_block = tk.Frame(sequence_panel, bg=self.colors["panel"])
-        editor_block.pack(fill="x", pady=(0, 12))
-        editor_block.grid_columnconfigure(0, weight=2)
-        editor_block.grid_columnconfigure(1, weight=1)
+        self.editor_block = tk.Frame(sequence_panel, bg=self.colors["panel"])
+        self.editor_block.pack(fill="x", pady=(0, 12))
+        self.editor_block.grid_columnconfigure(0, weight=2)
+        self.editor_block.grid_columnconfigure(1, weight=1)
 
-        tk.Label(editor_block, text=tr("labels.header_key_hotkey"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
-        tk.Label(editor_block, text=tr("labels.header_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        self.step_combo_label = tk.Label(self.editor_block, text=tr("labels.header_key_hotkey"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.step_combo_label.grid(row=0, column=0, sticky="w")
+        self.step_delay_label = tk.Label(self.editor_block, text=tr("labels.header_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.step_delay_label.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
-        step_combo_field = tk.Frame(editor_block, bg=self.colors["outline"])
-        step_combo_field.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        step_combo_inner = tk.Frame(step_combo_field, bg=self.colors["field"])
+        self.step_combo_field = tk.Frame(self.editor_block, bg=self.colors["outline"])
+        self.step_combo_field.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        step_combo_inner = tk.Frame(self.step_combo_field, bg=self.colors["field"])
         step_combo_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.step_combo_box = ttk.Combobox(
             step_combo_inner,
@@ -1257,9 +1285,9 @@ class AutoKeyboardApp:
         )
         self.step_combo_box.pack(fill="x", expand=True)
 
-        delay_field = tk.Frame(editor_block, bg=self.colors["outline"])
-        delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0))
-        delay_inner = tk.Frame(delay_field, bg=self.colors["field"])
+        self.step_delay_field = tk.Frame(self.editor_block, bg=self.colors["outline"])
+        self.step_delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 0))
+        delay_inner = tk.Frame(self.step_delay_field, bg=self.colors["field"])
         delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.step_delay_entry = ttk.Entry(delay_inner, textvariable=self.step_delay_var, style="Console.TEntry")
         self.step_delay_entry.pack(side="left", fill="x", expand=True)
@@ -1286,34 +1314,36 @@ class AutoKeyboardApp:
         self.sequence_table.pack(fill="both", expand=True)
         self.sequence_table.bind("<<TreeviewSelect>>", self._populate_editor_from_selection)
 
-        action_bar = tk.Frame(sequence_panel, bg=self.colors["panel"])
-        action_bar.pack(fill="x", pady=(12, 0))
+        self.action_bar = tk.Frame(sequence_panel, bg=self.colors["panel"])
+        self.action_bar.pack(fill="x", pady=(12, 0))
         for index in range(6):
-            action_bar.grid_columnconfigure(index, weight=1)
+            self.action_bar.grid_columnconfigure(index, weight=1)
 
-        ttk.Button(action_bar, text=tr("labels.button_add"), command=self._add_step, style="Ghost.TButton").grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        ttk.Button(action_bar, text=tr("labels.button_update"), command=self._update_selected_step, style="Ghost.TButton").grid(row=0, column=1, sticky="ew", padx=6)
-        ttk.Button(action_bar, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton").grid(row=0, column=2, sticky="ew", padx=6)
-        ttk.Button(action_bar, text=tr("labels.button_up"), command=lambda: self._move_selected_step(-1), style="Slim.TButton").grid(row=0, column=3, sticky="ew", padx=6)
-        ttk.Button(action_bar, text=tr("labels.button_down"), command=lambda: self._move_selected_step(1), style="Slim.TButton").grid(row=0, column=4, sticky="ew", padx=6)
-        ttk.Button(action_bar, text=tr("labels.button_clear"), command=self._clear_sequence, style="Ghost.TButton").grid(row=0, column=5, sticky="ew", padx=(6, 0))
+        self.action_buttons = [
+            ttk.Button(self.action_bar, text=tr("labels.button_add"), command=self._add_step, style="Ghost.TButton"),
+            ttk.Button(self.action_bar, text=tr("labels.button_update"), command=self._update_selected_step, style="Ghost.TButton"),
+            ttk.Button(self.action_bar, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton"),
+            ttk.Button(self.action_bar, text=tr("labels.button_up"), command=lambda: self._move_selected_step(-1), style="Slim.TButton"),
+            ttk.Button(self.action_bar, text=tr("labels.button_down"), command=lambda: self._move_selected_step(1), style="Slim.TButton"),
+            ttk.Button(self.action_bar, text=tr("labels.button_clear"), command=self._clear_sequence, style="Ghost.TButton"),
+        ]
 
-        execution_panel = self._create_panel(
-            shell,
+        self.execution_panel_outer, execution_panel, self.execution_subtitle_label = self._create_panel(
+            self.shell,
             row=2,
             column=1,
             title=tr("labels.panel_execution_title"),
             subtitle=tr("labels.panel_execution_subtitle"),
         )
 
-        controls_row = tk.Frame(execution_panel, bg=self.colors["panel"])
-        controls_row.pack(fill="x", pady=(0, 14))
-        controls_row.grid_columnconfigure(0, weight=1)
-        controls_row.grid_columnconfigure(1, weight=1)
+        self.controls_row = tk.Frame(execution_panel, bg=self.colors["panel"])
+        self.controls_row.pack(fill="x", pady=(0, 14))
+        self.controls_row.grid_columnconfigure(0, weight=1)
+        self.controls_row.grid_columnconfigure(1, weight=1)
 
-        self.start_button = ttk.Button(controls_row, text=tr("labels.button_start"), command=self.start, style="Primary.TButton")
+        self.start_button = ttk.Button(self.controls_row, text=tr("labels.button_start"), command=self.start, style="Primary.TButton")
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.stop_button = ttk.Button(controls_row, text=tr("labels.button_stop"), command=self.stop, style="Danger.TButton")
+        self.stop_button = ttk.Button(self.controls_row, text=tr("labels.button_stop"), command=self.stop, style="Danger.TButton")
         self.stop_button.grid(row=0, column=1, sticky="ew")
         self.stop_button.state(["disabled"])
 
@@ -1325,49 +1355,53 @@ class AutoKeyboardApp:
         tk.Label(status_strip, textvariable=self.status_var, bg=self.colors["field"], fg=self.colors["text"], font=self.fonts["body"]).pack(side="left", padx=(8, 0))
         tk.Label(status_strip, textvariable=self.engine_mode_var, bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["section"]).pack(side="right")
 
-        config_panel = self._create_panel(
-            shell,
+        self.config_panel_outer, config_panel, self.config_subtitle_label = self._create_panel(
+            self.shell,
             row=3,
             column=1,
             title=tr("labels.panel_config_title"),
             subtitle=tr("labels.panel_config_subtitle"),
         )
 
-        fields = tk.Frame(config_panel, bg=self.colors["panel"])
-        fields.pack(fill="x")
-        fields.grid_columnconfigure(0, weight=1)
-        fields.grid_columnconfigure(1, weight=1)
+        self.fields = tk.Frame(config_panel, bg=self.colors["panel"])
+        self.fields.pack(fill="x")
+        self.fields.grid_columnconfigure(0, weight=1)
+        self.fields.grid_columnconfigure(1, weight=1)
 
-        tk.Label(fields, text=tr("labels.label_global_interval"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=0, sticky="w")
-        tk.Label(fields, text=tr("labels.label_initial_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        self.interval_label = tk.Label(self.fields, text=tr("labels.label_global_interval"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.interval_label.grid(row=0, column=0, sticky="w")
+        self.start_delay_label = tk.Label(self.fields, text=tr("labels.label_initial_delay"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.start_delay_label.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
-        interval_field = tk.Frame(fields, bg=self.colors["outline"])
-        interval_field.grid(row=1, column=0, sticky="ew", pady=(8, 12))
-        interval_inner = tk.Frame(interval_field, bg=self.colors["field"])
+        self.interval_field = tk.Frame(self.fields, bg=self.colors["outline"])
+        self.interval_field.grid(row=1, column=0, sticky="ew", pady=(8, 12))
+        interval_inner = tk.Frame(self.interval_field, bg=self.colors["field"])
         interval_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(interval_inner, textvariable=self.interval_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
         tk.Label(interval_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
-        delay_field = tk.Frame(fields, bg=self.colors["outline"])
-        delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
-        delay_inner = tk.Frame(delay_field, bg=self.colors["field"])
+        self.start_delay_field = tk.Frame(self.fields, bg=self.colors["outline"])
+        self.start_delay_field.grid(row=1, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
+        delay_inner = tk.Frame(self.start_delay_field, bg=self.colors["field"])
         delay_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(delay_inner, textvariable=self.start_delay_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
         tk.Label(delay_inner, text=tr("labels.unit_sec"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
-        tk.Label(fields, text=tr("labels.label_sequence_loop_pause"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=0, sticky="w")
-        tk.Label(fields, text=tr("labels.label_single_key_fallback"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"]).grid(row=2, column=1, sticky="w", padx=(12, 0))
+        self.sequence_pause_label = tk.Label(self.fields, text=tr("labels.label_sequence_loop_pause"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.sequence_pause_label.grid(row=2, column=0, sticky="w")
+        self.single_fallback_label = tk.Label(self.fields, text=tr("labels.label_single_key_fallback"), bg=self.colors["panel"], fg=self.colors["muted"], font=self.fonts["section"])
+        self.single_fallback_label.grid(row=2, column=1, sticky="w", padx=(12, 0))
 
-        sequence_pause_field = tk.Frame(fields, bg=self.colors["outline"])
-        sequence_pause_field.grid(row=3, column=0, sticky="ew", pady=(8, 12))
-        sequence_pause_inner = tk.Frame(sequence_pause_field, bg=self.colors["field"])
+        self.sequence_pause_field = tk.Frame(self.fields, bg=self.colors["outline"])
+        self.sequence_pause_field.grid(row=3, column=0, sticky="ew", pady=(8, 12))
+        sequence_pause_inner = tk.Frame(self.sequence_pause_field, bg=self.colors["field"])
         sequence_pause_inner.pack(fill="both", expand=True, padx=1, pady=1)
         ttk.Entry(sequence_pause_inner, textvariable=self.sequence_pause_var, style="Console.TEntry").pack(side="left", fill="x", expand=True)
         tk.Label(sequence_pause_inner, text=tr("labels.unit_ms"), bg=self.colors["field"], fg=self.colors["subtle"], font=self.fonts["mono"], padx=10).pack(side="right")
 
-        single_field = tk.Frame(fields, bg=self.colors["outline"])
-        single_field.grid(row=3, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
-        single_combo_inner = tk.Frame(single_field, bg=self.colors["field"])
+        self.single_field = tk.Frame(self.fields, bg=self.colors["outline"])
+        self.single_field.grid(row=3, column=1, sticky="ew", padx=(12, 0), pady=(8, 12))
+        single_combo_inner = tk.Frame(self.single_field, bg=self.colors["field"])
         single_combo_inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.single_combo_box = ttk.Combobox(
             single_combo_inner,
@@ -1393,6 +1427,152 @@ class AutoKeyboardApp:
         ).pack(anchor="w")
 
         self._update_status_indicator(False)
+        self._apply_action_bar_layout(False)
+
+    def _handle_root_configure(self, event: tk.Event) -> None:
+        if event.widget is not self.root:
+            return
+        if self._resize_after_id is not None:
+            self.root.after_cancel(self._resize_after_id)
+        self._resize_after_id = self.root.after(50, self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self, force: bool = False) -> None:
+        if not hasattr(self, "shell"):
+            return
+
+        self._resize_after_id = None
+        width = max(self.root.winfo_width(), self.root.winfo_reqwidth())
+        stacked = width < 1120
+        compact_metrics = width < 980
+        mode = "stacked" if stacked else "wide"
+
+        if force or mode != self._responsive_mode:
+            if stacked:
+                self.shell.grid_columnconfigure(0, weight=1)
+                self.shell.grid_columnconfigure(1, weight=0)
+                self.nav.grid_columnconfigure(0, weight=1)
+                self.nav.grid_columnconfigure(1, weight=0)
+                self.nav.grid_columnconfigure(2, weight=0)
+                self.nav.grid_columnconfigure(3, weight=0)
+                self.brand.grid_configure(row=0, column=0, columnspan=4, sticky="w")
+                self.nav_actions.grid_configure(row=1, column=0, sticky="w", padx=(0, 0), pady=(10, 0))
+                self.language_switcher.grid_configure(row=1, column=3, sticky="e", padx=(0, 6), pady=(10, 0))
+
+                self.summary_outer.grid_configure(row=1, column=0, columnspan=2)
+                self.summary_left.grid_configure(row=0, column=0, sticky="ew")
+                self.metrics.grid_configure(row=1, column=0, sticky="ew", pady=(16, 0))
+
+                self.sequence_panel_outer.grid_configure(row=2, column=0, columnspan=2, rowspan=1, sticky="nsew")
+                self.execution_panel_outer.grid_configure(row=3, column=0, columnspan=2, sticky="nsew")
+                self.config_panel_outer.grid_configure(row=4, column=0, columnspan=2, sticky="nsew")
+
+                self.controls_row.grid_columnconfigure(0, weight=1)
+                self.controls_row.grid_columnconfigure(1, weight=1)
+                self.start_button.grid_configure(row=0, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
+                self.stop_button.grid_configure(row=1, column=0, columnspan=2, padx=(0, 0))
+
+                self.step_combo_label.grid_configure(row=0, column=0, columnspan=2, padx=(0, 0))
+                self.step_combo_field.grid_configure(row=1, column=0, columnspan=2, padx=(0, 0))
+                self.step_delay_label.grid_configure(row=2, column=0, columnspan=2, padx=(0, 0), pady=(12, 0))
+                self.step_delay_field.grid_configure(row=3, column=0, columnspan=2, padx=(0, 0))
+
+                self.interval_label.grid_configure(row=0, column=0, columnspan=2, padx=(0, 0))
+                self.interval_field.grid_configure(row=1, column=0, columnspan=2, padx=(0, 0))
+                self.start_delay_label.grid_configure(row=2, column=0, columnspan=2, padx=(0, 0))
+                self.start_delay_field.grid_configure(row=3, column=0, columnspan=2, padx=(0, 0))
+                self.sequence_pause_label.grid_configure(row=4, column=0, columnspan=2, padx=(0, 0))
+                self.sequence_pause_field.grid_configure(row=5, column=0, columnspan=2, padx=(0, 0))
+                self.single_fallback_label.grid_configure(row=6, column=0, columnspan=2, padx=(0, 0))
+                self.single_field.grid_configure(row=7, column=0, columnspan=2, padx=(0, 0))
+            else:
+                self.shell.grid_columnconfigure(0, weight=3)
+                self.shell.grid_columnconfigure(1, weight=2)
+                self.nav.grid_columnconfigure(0, weight=0)
+                self.nav.grid_columnconfigure(1, weight=1)
+                self.nav.grid_columnconfigure(2, weight=0)
+                self.nav.grid_columnconfigure(3, weight=0)
+                self.brand.grid_configure(row=0, column=0, columnspan=1, sticky="w")
+                self.nav_actions.grid_configure(row=0, column=2, sticky="e", padx=(0, 12), pady=(0, 0))
+                self.language_switcher.grid_configure(row=0, column=3, sticky="e", padx=(0, 6), pady=(0, 0))
+
+                self.summary_outer.grid_configure(row=1, column=0, columnspan=2)
+                self.summary_left.grid_configure(row=0, column=0, sticky="w")
+                self.metrics.grid_configure(row=0, column=1, sticky="e", pady=(0, 0))
+
+                self.sequence_panel_outer.grid_configure(row=2, column=0, columnspan=1, rowspan=3, sticky="nsew")
+                self.execution_panel_outer.grid_configure(row=2, column=1, columnspan=1, sticky="nsew")
+                self.config_panel_outer.grid_configure(row=3, column=1, columnspan=1, sticky="nsew")
+
+                self.start_button.grid_configure(row=0, column=0, columnspan=1, padx=(0, 10), pady=(0, 0))
+                self.stop_button.grid_configure(row=0, column=1, columnspan=1, padx=(0, 0), pady=(0, 0))
+
+                self.step_combo_label.grid_configure(row=0, column=0, columnspan=1, padx=(0, 0), pady=(0, 0))
+                self.step_combo_field.grid_configure(row=1, column=0, columnspan=1, padx=(0, 0))
+                self.step_delay_label.grid_configure(row=0, column=1, columnspan=1, padx=(12, 0), pady=(0, 0))
+                self.step_delay_field.grid_configure(row=1, column=1, columnspan=1, padx=(12, 0))
+
+                self.interval_label.grid_configure(row=0, column=0, columnspan=1, padx=(0, 0))
+                self.interval_field.grid_configure(row=1, column=0, columnspan=1, padx=(0, 0))
+                self.start_delay_label.grid_configure(row=0, column=1, columnspan=1, padx=(12, 0))
+                self.start_delay_field.grid_configure(row=1, column=1, columnspan=1, padx=(12, 0))
+                self.sequence_pause_label.grid_configure(row=2, column=0, columnspan=1, padx=(0, 0))
+                self.sequence_pause_field.grid_configure(row=3, column=0, columnspan=1, padx=(0, 0))
+                self.single_fallback_label.grid_configure(row=2, column=1, columnspan=1, padx=(12, 0))
+                self.single_field.grid_configure(row=3, column=1, columnspan=1, padx=(12, 0))
+
+            self._responsive_mode = mode
+
+        self._apply_metric_layout(compact_metrics)
+        self._apply_action_bar_layout(stacked)
+        self._update_responsive_copy(width, stacked)
+        self._update_treeview_columns(width, stacked)
+
+    def _apply_metric_layout(self, compact: bool) -> None:
+        layout = ((0, 0), (1, 0)) if compact else ((0, 0), (0, 1))
+        for column in range(2):
+            self.metrics.grid_columnconfigure(column, weight=1 if not compact or column == 0 else 0)
+        for index, card in enumerate(self.metric_cards):
+            row, column = layout[index]
+            card.grid_configure(row=row, column=column, sticky="ew", padx=(0, 0), pady=(0, 12 if compact and index == 0 else 0))
+
+    def _apply_action_bar_layout(self, stacked: bool) -> None:
+        for index in range(6):
+            self.action_bar.grid_columnconfigure(index, weight=0)
+            self.action_bar.grid_rowconfigure(index, weight=0)
+
+        if stacked:
+            positions = ((0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2))
+            for column in range(3):
+                self.action_bar.grid_columnconfigure(column, weight=1)
+            for button, (row, column) in zip(self.action_buttons, positions):
+                button.grid(row=row, column=column, sticky="ew", padx=4, pady=4)
+        else:
+            for column in range(6):
+                self.action_bar.grid_columnconfigure(column, weight=1)
+            for index, button in enumerate(self.action_buttons):
+                left = 0 if index == 0 else 6
+                right = 0 if index == len(self.action_buttons) - 1 else 6
+                button.grid(row=0, column=index, sticky="ew", padx=(left, right), pady=(0, 0))
+
+    def _update_responsive_copy(self, width: int, stacked: bool) -> None:
+        profile_wrap = max(320, width - 220) if stacked else max(360, int(width * 0.32))
+        subtitle_wrap = max(280, width - 140) if stacked else max(320, int(width * 0.28))
+        self.profile_meta_label.configure(wraplength=profile_wrap)
+        for label in (self.sequence_subtitle_label, self.execution_subtitle_label, self.config_subtitle_label):
+            if label is not None:
+                label.configure(wraplength=subtitle_wrap)
+
+    def _update_treeview_columns(self, width: int, stacked: bool) -> None:
+        available = self.sequence_table.winfo_width()
+        if available <= 1:
+            available = width - (140 if stacked else 720)
+        available = max(available, 320)
+        order_width = 72
+        delay_width = 110 if stacked else 130
+        combo_width = max(160 if stacked else 220, available - order_width - delay_width)
+        self.sequence_table.column("order", width=order_width, minwidth=64, anchor="center", stretch=False)
+        self.sequence_table.column("delay", width=delay_width, minwidth=96, anchor="center", stretch=False)
+        self.sequence_table.column("combo", width=combo_width, minwidth=160, anchor="w", stretch=True)
 
     def _save_profile(self) -> None:
         self._save_config()
