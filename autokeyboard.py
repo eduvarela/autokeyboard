@@ -13,11 +13,19 @@ from ctypes import wintypes
 
 CONFIG_PATH = Path(__file__).with_name("autokeyboard_config.json")
 STRINGS_PATH = Path(__file__).with_name("strings.json")
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+ENGLISH_FLAG_PATH = ASSETS_DIR / "english.png"
+PORTUGUESE_FLAG_PATH = ASSETS_DIR / "portuguese.png"
 DEFAULT_START_DELAY = 3
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
 KEY_HOLD_SECONDS = 0.03
 DEFAULT_USE_SCANCODES = True
+DEFAULT_LANGUAGE = "pt-BR"
+LANGUAGE_ASSETS = {
+    "pt-BR": PORTUGUESE_FLAG_PATH,
+    "en": ENGLISH_FLAG_PATH,
+}
 KEY_COMBO_OPTIONS = (
     "A",
     "B",
@@ -91,97 +99,191 @@ KEY_COMBO_OPTIONS = (
     "ctrl+alt+del",
 )
 
-DEFAULT_STRINGS = {
-    "app": {
-        "title": "Auto Keyboard",
-        "version": "v1.0",
+DEFAULT_TRANSLATIONS = {
+    "pt-BR": {
+        "app": {"title": "Auto Keyboard", "version": "v1.0"},
+        "status": {
+            "ready": "Pronto para iniciar.",
+            "language_changed": "Idioma alterado para {language_name}.",
+            "profile_saved": "Perfil salvo no painel atual.",
+            "step_added": "Passo adicionado na sequencia.",
+            "step_updated": "Passo atualizado.",
+            "step_removed": "Passo removido.",
+            "sequence_cleared": "Sequencia limpa. O app voltou para o modo de tecla unica.",
+            "stopping": "Parando automacao...",
+            "starting_mode": "Automacao iniciada em modo {mode_label}. Troque o foco para a janela alvo durante a contagem.",
+            "countdown": "Iniciando em {remaining}s. Deixe a janela alvo em foco.",
+            "stopped_before_start": "Automacao interrompida antes de iniciar.",
+            "sequence_running": "Sequencia em execucao ({mode_label}).",
+            "single_running": "Tecla '{combo}' em repeticao ({mode_label}).",
+            "automation_stopped": "Automacao interrompida.",
+            "send_failure": "Falha ao enviar tecla: {error}",
+            "unexpected_error": "Erro inesperado: {error}",
+            "automation_finished": "Automacao finalizada.",
+            "config_load_failed": "Nao foi possivel carregar a configuracao anterior."
+        },
+        "labels": {
+            "mode_single": "MODO TECLA UNICA",
+            "mode_sequence": "MODO SEQUENCIA ATIVO",
+            "profile_name": "Auto Keyboard",
+            "profile_state_ready": "PRONTO",
+            "profile_state_active": "ATIVO",
+            "profile_meta": "Perfil de automacao precisa",
+            "engine_scan_code": "SCAN CODE",
+            "engine_virtual_key": "VIRTUAL KEY",
+            "brand": "Auto Keyboard",
+            "nav_title": "Slots da sequencia",
+            "metric_actions": "TOTAL ACTIONS",
+            "metric_cycle": "CYCLE TIME",
+            "panel_sequence_title": "SEQUENCE_BUILDER",
+            "panel_sequence_subtitle": "Monte e ajuste sua rotacao de teclas com modulos inspirados em hardware.",
+            "panel_execution_title": "SYSTEM_EXECUTION",
+            "panel_execution_subtitle": "Controles de alto contraste com telemetria do motor em tempo real.",
+            "panel_config_title": "CONFIG_PARAMETERS",
+            "panel_config_subtitle": "Tempos, fallback e compatibilidade do motor de automacao.",
+            "header_key_hotkey": "TECLA / ATALHO",
+            "header_delay": "ATRASO",
+            "table_id": "ID",
+            "table_action": "ACAO",
+            "table_wait": "ESPERA",
+            "button_remove": "REMOVE",
+            "button_add_action": "ADD ACTION",
+            "button_add": "ADD",
+            "button_update": "UPDATE",
+            "button_up": "UP",
+            "button_down": "DOWN",
+            "button_clear": "CLEAR",
+            "button_start": "START",
+            "button_stop": "STOP",
+            "label_global_interval": "INTERVALO GLOBAL",
+            "label_initial_delay": "ATRASO INICIAL",
+            "label_sequence_loop_pause": "PAUSA DO LOOP",
+            "label_single_key_fallback": "TECLA DE FALLBACK",
+            "checkbox_scancode": "Usar scan code (melhor para jogos)",
+            "unit_ms": "ms",
+            "unit_sec": "seg",
+            "summary_no_fallback": "Sem tecla de fallback",
+            "summary_profile_meta": "{actions} acao(oes) configurada(s) • Fallback: {combo_display} • {mode_name}",
+            "mode_scan_code_lower": "scan code",
+            "mode_virtual_key_lower": "virtual key",
+            "language_portuguese": "Portugues",
+            "language_english": "English"
+        },
+        "dialogs": {
+            "move_title": "Mover passo",
+            "move_select": "Selecione um passo para mover.",
+            "invalid_sequence_title": "Sequencia invalida",
+            "update_title": "Atualizar passo",
+            "update_select": "Selecione um passo para atualizar.",
+            "remove_title": "Remover passo",
+            "remove_select": "Selecione um passo para remover.",
+            "invalid_config_title": "Configuracao invalida"
+        },
+        "validation": {
+            "missing_key": "Informe ao menos uma tecla.",
+            "unknown_key": "Tecla desconhecida: '{key}'. Use nomes como A, F6, space, enter, ctrl+shift+s.",
+            "integer_required": "{label} precisa ser um numero inteiro.",
+            "non_negative_required": "{label} nao pode ser negativo.",
+            "label_step_delay": "Espera depois",
+            "label_interval": "Intervalo",
+            "label_start_delay": "Contagem inicial",
+            "label_sequence_pause": "Pausa apos sequencia",
+            "scancode_mapping_failed": "Nao foi possivel mapear a tecla {key_code} para scan code.",
+            "send_input_failed": "Falha ao enviar tecla para o Windows. Codigo: {error_code}"
+        }
     },
-    "status": {
-        "ready": "Pronto para iniciar.",
-        "profile_saved": "Perfil salvo no painel atual.",
-        "step_added": "Passo adicionado na sequencia.",
-        "step_updated": "Passo atualizado.",
-        "step_removed": "Passo removido.",
-        "sequence_cleared": "Sequencia limpa. O app voltou para o modo de tecla unica.",
-        "stopping": "Parando automacao...",
-        "starting_mode": "Automacao iniciada em modo {mode_label}. Troque o foco para a janela alvo durante a contagem.",
-        "countdown": "Iniciando em {remaining}s. Deixe a janela alvo em foco.",
-        "stopped_before_start": "Automacao interrompida antes de iniciar.",
-        "sequence_running": "Sequencia em execucao ({mode_label}).",
-        "single_running": "Tecla '{combo}' em repeticao ({mode_label}).",
-        "automation_stopped": "Automacao interrompida.",
-        "send_failure": "Falha ao enviar tecla: {error}",
-        "unexpected_error": "Erro inesperado: {error}",
-        "automation_finished": "Automacao finalizada.",
-        "config_load_failed": "Nao foi possivel carregar a configuracao anterior.",
-    },
-    "labels": {
-        "mode_single": "SINGLE KEY FALLBACK",
-        "mode_sequence": "SEQUENCE MODE ACTIVE",
-        "profile_name": "Auto Keyboard",
-        "profile_state_ready": "READY",
-        "profile_state_active": "ACTIVE",
-        "profile_meta": "Precision automation profile",
-        "engine_scan_code": "SCAN CODE",
-        "engine_virtual_key": "VIRTUAL KEY",
-        "brand": "Auto Keyboard",
-        "nav_title": "Sequence slots",
-        "metric_actions": "TOTAL ACTIONS",
-        "metric_cycle": "CYCLE TIME",
-        "panel_sequence_title": "SEQUENCE_BUILDER",
-        "panel_sequence_subtitle": "Build and tune your key rotation sequence with hardware-style modules.",
-        "panel_execution_title": "SYSTEM_EXECUTION",
-        "panel_execution_subtitle": "High-contrast controls with live engine telemetry.",
-        "panel_config_title": "CONFIG_PARAMETERS",
-        "panel_config_subtitle": "Precision timing, fallback behavior, and compatibility settings.",
-        "header_key_hotkey": "KEY / HOTKEY",
-        "header_delay": "DELAY",
-        "table_id": "ID",
-        "table_action": "ACTION",
-        "table_wait": "WAIT",
-        "button_remove": "REMOVE",
-        "button_add_action": "ADD ACTION",
-        "button_add": "ADD",
-        "button_update": "UPDATE",
-        "button_up": "UP",
-        "button_down": "DOWN",
-        "button_clear": "CLEAR",
-        "button_start": "START",
-        "button_stop": "STOP",
-        "label_global_interval": "GLOBAL INTERVAL",
-        "label_initial_delay": "INITIAL DELAY",
-        "label_sequence_loop_pause": "SEQUENCE LOOP PAUSE",
-        "label_single_key_fallback": "SINGLE KEY FALLBACK",
-        "checkbox_scancode": "Usar scan code (melhor para jogos)",
-        "unit_ms": "ms",
-        "unit_sec": "sec",
-        "summary_no_fallback": "No fallback key",
-        "summary_profile_meta": "{actions} action(s) configured • Fallback: {combo_display} • {mode_name}",
-        "mode_scan_code_lower": "scan code",
-        "mode_virtual_key_lower": "virtual key",
-    },
-    "dialogs": {
-        "move_title": "Mover passo",
-        "move_select": "Selecione um passo para mover.",
-        "invalid_sequence_title": "Sequencia invalida",
-        "update_title": "Atualizar passo",
-        "update_select": "Selecione um passo para atualizar.",
-        "remove_title": "Remover passo",
-        "remove_select": "Selecione um passo para remover.",
-        "invalid_config_title": "Configuracao invalida",
-    },
-    "validation": {
-        "missing_key": "Informe ao menos uma tecla.",
-        "unknown_key": "Tecla desconhecida: '{key}'. Use nomes como A, F6, space, enter, ctrl+shift+s.",
-        "integer_required": "{label} precisa ser um numero inteiro.",
-        "non_negative_required": "{label} nao pode ser negativo.",
-        "label_step_delay": "Espera depois",
-        "label_interval": "Intervalo",
-        "label_start_delay": "Contagem inicial",
-        "label_sequence_pause": "Pausa apos sequencia",
-        "scancode_mapping_failed": "Nao foi possivel mapear a tecla {key_code} para scan code.",
-        "send_input_failed": "Falha ao enviar tecla para o Windows. Codigo: {error_code}",
-    },
+    "en": {
+        "app": {"title": "Auto Keyboard", "version": "v1.0"},
+        "status": {
+            "ready": "Ready to start.",
+            "language_changed": "Language changed to {language_name}.",
+            "profile_saved": "Profile saved to the current panel.",
+            "step_added": "Step added to the sequence.",
+            "step_updated": "Step updated.",
+            "step_removed": "Step removed.",
+            "sequence_cleared": "Sequence cleared. The app returned to single-key mode.",
+            "stopping": "Stopping automation...",
+            "starting_mode": "Automation started in {mode_label} mode. Switch focus to the target window during the countdown.",
+            "countdown": "Starting in {remaining}s. Keep the target window focused.",
+            "stopped_before_start": "Automation stopped before starting.",
+            "sequence_running": "Sequence running ({mode_label}).",
+            "single_running": "Repeating key '{combo}' ({mode_label}).",
+            "automation_stopped": "Automation stopped.",
+            "send_failure": "Failed to send key: {error}",
+            "unexpected_error": "Unexpected error: {error}",
+            "automation_finished": "Automation finished.",
+            "config_load_failed": "Could not load the previous configuration."
+        },
+        "labels": {
+            "mode_single": "SINGLE KEY FALLBACK",
+            "mode_sequence": "SEQUENCE MODE ACTIVE",
+            "profile_name": "Auto Keyboard",
+            "profile_state_ready": "READY",
+            "profile_state_active": "ACTIVE",
+            "profile_meta": "Precision automation profile",
+            "engine_scan_code": "SCAN CODE",
+            "engine_virtual_key": "VIRTUAL KEY",
+            "brand": "Auto Keyboard",
+            "nav_title": "Sequence slots",
+            "metric_actions": "TOTAL ACTIONS",
+            "metric_cycle": "CYCLE TIME",
+            "panel_sequence_title": "SEQUENCE_BUILDER",
+            "panel_sequence_subtitle": "Build and tune your key rotation sequence with hardware-style modules.",
+            "panel_execution_title": "SYSTEM_EXECUTION",
+            "panel_execution_subtitle": "High-contrast controls with live engine telemetry.",
+            "panel_config_title": "CONFIG_PARAMETERS",
+            "panel_config_subtitle": "Precision timing, fallback behavior, and compatibility settings.",
+            "header_key_hotkey": "KEY / HOTKEY",
+            "header_delay": "DELAY",
+            "table_id": "ID",
+            "table_action": "ACTION",
+            "table_wait": "WAIT",
+            "button_remove": "REMOVE",
+            "button_add_action": "ADD ACTION",
+            "button_add": "ADD",
+            "button_update": "UPDATE",
+            "button_up": "UP",
+            "button_down": "DOWN",
+            "button_clear": "CLEAR",
+            "button_start": "START",
+            "button_stop": "STOP",
+            "label_global_interval": "GLOBAL INTERVAL",
+            "label_initial_delay": "INITIAL DELAY",
+            "label_sequence_loop_pause": "SEQUENCE LOOP PAUSE",
+            "label_single_key_fallback": "SINGLE KEY FALLBACK",
+            "checkbox_scancode": "Use scan code (better for games)",
+            "unit_ms": "ms",
+            "unit_sec": "sec",
+            "summary_no_fallback": "No fallback key",
+            "summary_profile_meta": "{actions} action(s) configured • Fallback: {combo_display} • {mode_name}",
+            "mode_scan_code_lower": "scan code",
+            "mode_virtual_key_lower": "virtual key",
+            "language_portuguese": "Portuguese",
+            "language_english": "English"
+        },
+        "dialogs": {
+            "move_title": "Move step",
+            "move_select": "Select a step to move.",
+            "invalid_sequence_title": "Invalid sequence",
+            "update_title": "Update step",
+            "update_select": "Select a step to update.",
+            "remove_title": "Remove step",
+            "remove_select": "Select a step to remove.",
+            "invalid_config_title": "Invalid configuration"
+        },
+        "validation": {
+            "missing_key": "Enter at least one key.",
+            "unknown_key": "Unknown key: '{key}'. Use names like A, F6, space, enter, ctrl+shift+s.",
+            "integer_required": "{label} must be an integer.",
+            "non_negative_required": "{label} cannot be negative.",
+            "label_step_delay": "Delay after",
+            "label_interval": "Interval",
+            "label_start_delay": "Initial countdown",
+            "label_sequence_pause": "Sequence pause",
+            "scancode_mapping_failed": "Could not map key {key_code} to scan code.",
+            "send_input_failed": "Failed to send key to Windows. Code: {error_code}"
+        }
+    }
 }
 
 
@@ -195,26 +297,34 @@ def _merge_strings(base: dict, override: dict) -> dict:
     return merged
 
 
-APP_STRINGS = deepcopy(DEFAULT_STRINGS)
+APP_TRANSLATIONS = deepcopy(DEFAULT_TRANSLATIONS)
+APP_STRINGS = deepcopy(DEFAULT_TRANSLATIONS[DEFAULT_LANGUAGE])
+CURRENT_LANGUAGE = DEFAULT_LANGUAGE
 
 
-def load_app_strings() -> dict:
-    global APP_STRINGS
-    if not STRINGS_PATH.exists():
-        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
-        return APP_STRINGS
+def load_app_strings(language: str | None = None) -> dict:
+    global APP_TRANSLATIONS, APP_STRINGS, CURRENT_LANGUAGE
+    translations = deepcopy(DEFAULT_TRANSLATIONS)
 
-    try:
-        payload = json.loads(STRINGS_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
-        return APP_STRINGS
+    if STRINGS_PATH.exists():
+        try:
+            payload = json.loads(STRINGS_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = None
 
-    if not isinstance(payload, dict):
-        APP_STRINGS = deepcopy(DEFAULT_STRINGS)
-        return APP_STRINGS
+        if isinstance(payload, dict):
+            for locale, values in payload.items():
+                if isinstance(values, dict):
+                    base = translations.get(locale, {})
+                    translations[locale] = _merge_strings(base, values)
 
-    APP_STRINGS = _merge_strings(DEFAULT_STRINGS, payload)
+    selected_language = language or CURRENT_LANGUAGE
+    if selected_language not in translations:
+        selected_language = DEFAULT_LANGUAGE
+
+    APP_TRANSLATIONS = translations
+    APP_STRINGS = _merge_strings(translations[DEFAULT_LANGUAGE], translations[selected_language])
+    CURRENT_LANGUAGE = selected_language
     return APP_STRINGS
 
 
@@ -493,6 +603,8 @@ class KeySender:
 class AutoKeyboardApp:
     def __init__(self, root: tk.Tk) -> None:
         load_app_strings()
+        self.current_language = CURRENT_LANGUAGE
+        self.language_images: dict[str, tk.PhotoImage] = {}
         self.root = root
         self.root.title(tr("app.title"))
         self.root.geometry("1360x860")
@@ -673,6 +785,75 @@ class AutoKeyboardApp:
             focuscolor=self.colors["panel"],
         )
 
+    def _load_language_image(self, language_code: str) -> tk.PhotoImage | None:
+        image_path = LANGUAGE_ASSETS.get(language_code)
+        if image_path is None or not image_path.exists():
+            return None
+
+        try:
+            image = tk.PhotoImage(file=image_path)
+        except tk.TclError:
+            return None
+
+        max_width = 26
+        max_height = 18
+        shrink_x = max(1, (image.width() + max_width - 1) // max_width)
+        shrink_y = max(1, (image.height() + max_height - 1) // max_height)
+        shrink = max(shrink_x, shrink_y)
+        if shrink > 1:
+            image = image.subsample(shrink, shrink)
+
+        self.language_images[language_code] = image
+        return image
+
+    def _build_language_switcher(self, parent: tk.Misc) -> None:
+        for language_code in ("en", "pt-BR"):
+            image = self._load_language_image(language_code)
+            is_selected = self.current_language == language_code
+            button = tk.Button(
+                parent,
+                image=image,
+                text="" if image is not None else ("EN" if language_code == "en" else "PT"),
+                command=lambda code=language_code: self._set_language(code),
+                bg=self.colors["accent_soft"] if is_selected else self.colors["panel_high"],
+                fg=self.colors["text"],
+                activebackground=self.colors["panel_line"],
+                activeforeground=self.colors["text"],
+                relief="flat",
+                bd=0,
+                padx=8,
+                pady=6,
+                cursor="hand2",
+            )
+            button.pack(side="right", padx=(8, 0))
+
+    def _rebuild_ui(self) -> None:
+        running = self.worker_thread is not None and self.worker_thread.is_alive()
+        self.root.title(tr("app.title"))
+        for child in list(self.root.winfo_children()):
+            child.destroy()
+        self.language_images.clear()
+        self._build_styles()
+        self._build_layout()
+        self._refresh_sequence_table()
+        self._refresh_dashboard_summary()
+        self._set_running(running)
+
+    def _set_language(self, language_code: str) -> None:
+        if language_code == self.current_language:
+            return
+
+        load_app_strings(language_code)
+        self.current_language = CURRENT_LANGUAGE
+        self.status_var.set(
+            tr(
+                "status.language_changed",
+                language_name=tr("labels.language_english") if language_code == "en" else tr("labels.language_portuguese"),
+            )
+        )
+        self._rebuild_ui()
+        self._save_config()
+
     def _create_panel(self, parent: tk.Misc, row: int, column: int, *, rowspan: int = 1, title: str, subtitle: str | None = None, sticky: str = "nsew") -> tk.Frame:
         outer = tk.Frame(parent, bg=self.colors["outline"], bd=0, highlightthickness=0)
         outer.grid(row=row, column=column, rowspan=rowspan, sticky=sticky, padx=6, pady=6)
@@ -734,6 +915,7 @@ class AutoKeyboardApp:
         nav = tk.Frame(shell, bg=self.colors["background"])
         nav.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
         nav.grid_columnconfigure(1, weight=1)
+        nav.grid_columnconfigure(2, weight=0)
 
         brand = tk.Frame(nav, bg=self.colors["background"])
         brand.grid(row=0, column=0, sticky="w")
@@ -752,6 +934,10 @@ class AutoKeyboardApp:
             font=self.fonts["nav"],
             padx=10,
         ).pack(side="left")
+
+        language_switcher = tk.Frame(nav, bg=self.colors["background"])
+        language_switcher.grid(row=0, column=2, sticky="e")
+        self._build_language_switcher(language_switcher)
 
         summary_outer = tk.Frame(shell, bg=self.colors["outline"])
         summary_outer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 12), padx=6)
@@ -1221,6 +1407,7 @@ class AutoKeyboardApp:
 
     def _save_config(self) -> None:
         payload = {
+            "language": self.current_language,
             "single_combo": self.single_combo_var.get().strip(),
             "interval_ms": self.interval_var.get().strip(),
             "start_delay": self.start_delay_var.get().strip(),
@@ -1239,6 +1426,12 @@ class AutoKeyboardApp:
         except (OSError, json.JSONDecodeError):
             self.status_var.set(tr("status.config_load_failed"))
             return
+
+        configured_language = str(payload.get("language", self.current_language)).strip()
+        if configured_language and configured_language != self.current_language:
+            load_app_strings(configured_language)
+            self.current_language = CURRENT_LANGUAGE
+            self._rebuild_ui()
 
         self.single_combo_var.set(payload.get("single_combo", self.single_combo_var.get()))
         self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
