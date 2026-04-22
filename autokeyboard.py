@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from ctypes import wintypes
 
 
@@ -106,6 +106,10 @@ DEFAULT_TRANSLATIONS = {
             "ready": "Pronto para iniciar.",
             "language_changed": "Idioma alterado para {language_name}.",
             "profile_saved": "Perfil salvo no painel atual.",
+            "profile_imported": "Perfil importado com sucesso.",
+            "profile_exported": "Perfil exportado com sucesso.",
+            "profile_import_cancelled": "Importacao cancelada.",
+            "profile_export_cancelled": "Exportacao cancelada.",
             "step_added": "Passo adicionado na sequencia.",
             "step_updated": "Passo atualizado.",
             "step_removed": "Passo removido.",
@@ -139,7 +143,7 @@ DEFAULT_TRANSLATIONS = {
             "panel_sequence_subtitle": "Monte e ajuste sua rotacao de teclas com modulos inspirados em hardware.",
             "panel_execution_title": "SYSTEM_EXECUTION",
             "panel_execution_subtitle": "Controles de alto contraste com telemetria do motor em tempo real.",
-            "panel_config_title": "CONFIG_PARAMETERS",
+            "panel_config_title": "PARAMETROS DE CONFIGURACAO",
             "panel_config_subtitle": "Tempos, fallback e compatibilidade do motor de automacao.",
             "header_key_hotkey": "TECLA / ATALHO",
             "header_delay": "ATRASO",
@@ -147,6 +151,8 @@ DEFAULT_TRANSLATIONS = {
             "table_action": "ACAO",
             "table_wait": "ESPERA",
             "button_remove": "REMOVE",
+            "button_import": "IMPORT",
+            "button_export": "EXPORT",
             "button_add_action": "ADD ACTION",
             "button_add": "ADD",
             "button_update": "UPDATE",
@@ -177,7 +183,9 @@ DEFAULT_TRANSLATIONS = {
             "update_select": "Selecione um passo para atualizar.",
             "remove_title": "Remover passo",
             "remove_select": "Selecione um passo para remover.",
-            "invalid_config_title": "Configuracao invalida"
+            "invalid_config_title": "Configuracao invalida",
+            "import_title": "Importar perfil",
+            "export_title": "Exportar perfil"
         },
         "validation": {
             "missing_key": "Informe ao menos uma tecla.",
@@ -189,7 +197,9 @@ DEFAULT_TRANSLATIONS = {
             "label_start_delay": "Contagem inicial",
             "label_sequence_pause": "Pausa apos sequencia",
             "scancode_mapping_failed": "Nao foi possivel mapear a tecla {key_code} para scan code.",
-            "send_input_failed": "Falha ao enviar tecla para o Windows. Codigo: {error_code}"
+            "send_input_failed": "Falha ao enviar tecla para o Windows. Codigo: {error_code}",
+            "profile_invalid": "O arquivo de perfil e invalido.",
+            "profile_export_failed": "Nao foi possivel exportar o perfil: {error}"
         }
     },
     "en": {
@@ -198,6 +208,10 @@ DEFAULT_TRANSLATIONS = {
             "ready": "Ready to start.",
             "language_changed": "Language changed to {language_name}.",
             "profile_saved": "Profile saved to the current panel.",
+            "profile_imported": "Profile imported successfully.",
+            "profile_exported": "Profile exported successfully.",
+            "profile_import_cancelled": "Import cancelled.",
+            "profile_export_cancelled": "Export cancelled.",
             "step_added": "Step added to the sequence.",
             "step_updated": "Step updated.",
             "step_removed": "Step removed.",
@@ -231,7 +245,7 @@ DEFAULT_TRANSLATIONS = {
             "panel_sequence_subtitle": "Build and tune your key rotation sequence with hardware-style modules.",
             "panel_execution_title": "SYSTEM_EXECUTION",
             "panel_execution_subtitle": "High-contrast controls with live engine telemetry.",
-            "panel_config_title": "CONFIG_PARAMETERS",
+            "panel_config_title": "CONFIG PARAMETERS",
             "panel_config_subtitle": "Precision timing, fallback behavior, and compatibility settings.",
             "header_key_hotkey": "KEY / HOTKEY",
             "header_delay": "DELAY",
@@ -239,6 +253,8 @@ DEFAULT_TRANSLATIONS = {
             "table_action": "ACTION",
             "table_wait": "WAIT",
             "button_remove": "REMOVE",
+            "button_import": "IMPORT",
+            "button_export": "EXPORT",
             "button_add_action": "ADD ACTION",
             "button_add": "ADD",
             "button_update": "UPDATE",
@@ -269,7 +285,9 @@ DEFAULT_TRANSLATIONS = {
             "update_select": "Select a step to update.",
             "remove_title": "Remove step",
             "remove_select": "Select a step to remove.",
-            "invalid_config_title": "Invalid configuration"
+            "invalid_config_title": "Invalid configuration",
+            "import_title": "Import profile",
+            "export_title": "Export profile"
         },
         "validation": {
             "missing_key": "Enter at least one key.",
@@ -281,7 +299,9 @@ DEFAULT_TRANSLATIONS = {
             "label_start_delay": "Initial countdown",
             "label_sequence_pause": "Sequence pause",
             "scancode_mapping_failed": "Could not map key {key_code} to scan code.",
-            "send_input_failed": "Failed to send key to Windows. Code: {error_code}"
+            "send_input_failed": "Failed to send key to Windows. Code: {error_code}",
+            "profile_invalid": "The profile file is invalid.",
+            "profile_export_failed": "Could not export the profile: {error}"
         }
     }
 }
@@ -916,6 +936,7 @@ class AutoKeyboardApp:
         nav.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
         nav.grid_columnconfigure(1, weight=1)
         nav.grid_columnconfigure(2, weight=0)
+        nav.grid_columnconfigure(3, weight=0)
 
         brand = tk.Frame(nav, bg=self.colors["background"])
         brand.grid(row=0, column=0, sticky="w")
@@ -935,8 +956,13 @@ class AutoKeyboardApp:
             padx=10,
         ).pack(side="left")
 
+        nav_actions = tk.Frame(nav, bg=self.colors["background"])
+        nav_actions.grid(row=0, column=2, sticky="e", padx=(0, 12))
+        ttk.Button(nav_actions, text=tr("labels.button_import"), command=self._import_profile, style="Slim.TButton").pack(side="left", padx=(0, 8))
+        ttk.Button(nav_actions, text=tr("labels.button_export"), command=self._export_profile, style="Slim.TButton").pack(side="left")
+
         language_switcher = tk.Frame(nav, bg=self.colors["background"])
-        language_switcher.grid(row=0, column=2, sticky="e")
+        language_switcher.grid(row=0, column=3, sticky="e")
         self._build_language_switcher(language_switcher)
 
         summary_outer = tk.Frame(shell, bg=self.colors["outline"])
@@ -1163,6 +1189,97 @@ class AutoKeyboardApp:
     def _save_profile(self) -> None:
         self._save_config()
         self.status_var.set(tr("status.profile_saved"))
+
+    def _profile_payload(self) -> dict[str, object]:
+        return {
+            "language": self.current_language,
+            "single_combo": self.single_combo_var.get().strip(),
+            "interval_ms": self.interval_var.get().strip(),
+            "start_delay": self.start_delay_var.get().strip(),
+            "sequence_pause": self.sequence_pause_var.get().strip(),
+            "use_scancodes": self.use_scancodes_var.get(),
+            "sequence_steps": [asdict(step) for step in self.sequence_steps],
+        }
+
+    def _apply_profile_payload(self, payload: dict[str, object], rebuild_language: bool = True) -> None:
+        configured_language = str(payload.get("language", self.current_language)).strip()
+        if rebuild_language and configured_language and configured_language != self.current_language:
+            load_app_strings(configured_language)
+            self.current_language = CURRENT_LANGUAGE
+            self._rebuild_ui()
+
+        self.single_combo_var.set(str(payload.get("single_combo", self.single_combo_var.get())))
+        self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
+        self.start_delay_var.set(str(payload.get("start_delay", self.start_delay_var.get())))
+        self.sequence_pause_var.set(str(payload.get("sequence_pause", self.sequence_pause_var.get())))
+
+        raw_use_scancodes = payload.get("use_scancodes", self.use_scancodes_var.get())
+        if isinstance(raw_use_scancodes, str):
+            self.use_scancodes_var.set(raw_use_scancodes.strip().lower() in {"1", "true", "yes", "on"})
+        else:
+            self.use_scancodes_var.set(bool(raw_use_scancodes))
+
+        loaded_steps = []
+        for raw_step in payload.get("sequence_steps", []):
+            if not isinstance(raw_step, dict):
+                continue
+            combo = str(raw_step.get("combo", "")).strip()
+            delay = raw_step.get("delay_ms", 0)
+            try:
+                delay_ms = int(delay)
+            except (TypeError, ValueError):
+                continue
+            if combo:
+                loaded_steps.append(SequenceStep(combo=combo, delay_ms=max(0, delay_ms)))
+        self.sequence_steps = loaded_steps
+        self._refresh_sequence_table()
+
+    def _import_profile(self) -> None:
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title=tr("dialogs.import_title"),
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            self.status_var.set(tr("status.profile_import_cancelled"))
+            return
+
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            messagebox.showerror(tr("dialogs.invalid_config_title"), tr("validation.profile_invalid"), parent=self.root)
+            return
+
+        if not isinstance(payload, dict):
+            messagebox.showerror(tr("dialogs.invalid_config_title"), tr("validation.profile_invalid"), parent=self.root)
+            return
+
+        self._apply_profile_payload(payload, rebuild_language=True)
+        self._save_config()
+        self.status_var.set(tr("status.profile_imported"))
+
+    def _export_profile(self) -> None:
+        path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title=tr("dialogs.export_title"),
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            self.status_var.set(tr("status.profile_export_cancelled"))
+            return
+
+        try:
+            Path(path).write_text(json.dumps(self._profile_payload(), indent=2), encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror(
+                tr("dialogs.invalid_config_title"),
+                tr("validation.profile_export_failed", error=exc),
+                parent=self.root,
+            )
+            return
+
+        self.status_var.set(tr("status.profile_exported"))
 
     def _move_selected_step(self, offset: int) -> None:
         index = self._selected_index()
@@ -1406,15 +1523,7 @@ class AutoKeyboardApp:
             self.messages.put(("stopped", tr("status.automation_finished")))
 
     def _save_config(self) -> None:
-        payload = {
-            "language": self.current_language,
-            "single_combo": self.single_combo_var.get().strip(),
-            "interval_ms": self.interval_var.get().strip(),
-            "start_delay": self.start_delay_var.get().strip(),
-            "sequence_pause": self.sequence_pause_var.get().strip(),
-            "use_scancodes": self.use_scancodes_var.get(),
-            "sequence_steps": [asdict(step) for step in self.sequence_steps],
-        }
+        payload = self._profile_payload()
         CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _load_config(self) -> None:
@@ -1427,33 +1536,7 @@ class AutoKeyboardApp:
             self.status_var.set(tr("status.config_load_failed"))
             return
 
-        configured_language = str(payload.get("language", self.current_language)).strip()
-        if configured_language and configured_language != self.current_language:
-            load_app_strings(configured_language)
-            self.current_language = CURRENT_LANGUAGE
-            self._rebuild_ui()
-
-        self.single_combo_var.set(payload.get("single_combo", self.single_combo_var.get()))
-        self.interval_var.set(str(payload.get("interval_ms", self.interval_var.get())))
-        self.start_delay_var.set(str(payload.get("start_delay", self.start_delay_var.get())))
-        self.sequence_pause_var.set(str(payload.get("sequence_pause", self.sequence_pause_var.get())))
-        raw_use_scancodes = payload.get("use_scancodes", self.use_scancodes_var.get())
-        if isinstance(raw_use_scancodes, str):
-            self.use_scancodes_var.set(raw_use_scancodes.strip().lower() in {"1", "true", "yes", "on"})
-        else:
-            self.use_scancodes_var.set(bool(raw_use_scancodes))
-
-        loaded_steps = []
-        for raw_step in payload.get("sequence_steps", []):
-            combo = str(raw_step.get("combo", "")).strip()
-            delay = raw_step.get("delay_ms", 0)
-            try:
-                delay_ms = int(delay)
-            except (TypeError, ValueError):
-                continue
-            if combo:
-                loaded_steps.append(SequenceStep(combo=combo, delay_ms=max(0, delay_ms)))
-        self.sequence_steps = loaded_steps
+        self._apply_profile_payload(payload, rebuild_language=True)
 
     def _handle_close(self) -> None:
         self.stop_event.set()
