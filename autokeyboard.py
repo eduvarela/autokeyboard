@@ -890,6 +890,48 @@ class AutoKeyboardApp:
             ],
         )
         style.layout(
+            "ActionPrimary.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.layout(
+            "ActionDanger.TButton",
+            [
+                (
+                    "Button.border",
+                    {
+                        "sticky": "nswe",
+                        "border": "1",
+                        "children": [
+                            (
+                                "Button.padding",
+                                {
+                                    "sticky": "nswe",
+                                    "children": [("Button.label", {"sticky": "nswe"})],
+                                },
+                            )
+                        ],
+                    },
+                )
+            ],
+        )
+        style.layout(
             "Ghost.TButton",
             [
                 (
@@ -1181,7 +1223,7 @@ class AutoKeyboardApp:
         ).pack(side="left")
         header_actions = tk.Frame(sequence_header, bg=self.colors["panel"])
         header_actions.pack(side="right")
-        ttk.Button(header_actions, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Slim.TButton").pack(side="right")
+        ttk.Button(header_actions, text=tr("labels.button_remove"), command=self._remove_selected_step, style="Ghost.TButton").pack(side="right")
         ttk.Button(header_actions, text=tr("labels.button_add_action"), command=self._add_step, style="Ghost.TButton").pack(side="right", padx=(0, 8))
 
         editor_block = tk.Frame(sequence_panel, bg=self.colors["panel"])
