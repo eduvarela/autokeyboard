@@ -1164,14 +1164,15 @@ class AutoKeyboardApp:
             bg=self.colors["panel_high"],
             fg=self.colors["subtle"],
             font=self.fonts["section"],
-        ).pack(anchor="w")
+        ).pack(anchor="center")
         tk.Label(
             body,
             textvariable=variable,
             bg=self.colors["panel_high"],
             fg=self.colors["accent"],
             font=self.fonts["metric"],
-        ).pack(anchor="w", pady=(6, 0))
+            justify="center",
+        ).pack(anchor="center", pady=(6, 0))
         return outer
 
     def _build_layout(self) -> None:
@@ -1791,7 +1792,7 @@ class AutoKeyboardApp:
         self.status_led.itemconfigure(self.status_led_dot, fill=led_color)
         self.profile_state_var.set(tr("labels.profile_state_active") if running else tr("labels.profile_state_ready"))
         self.profile_badge.configure(
-            bg=self.colors["accent_soft"] if running else self.colors["outline"],
+            bg=self.colors["accent"] if running else self.colors["outline"],
             fg=self.colors["background"] if running else self.colors["text"],
         )
 
