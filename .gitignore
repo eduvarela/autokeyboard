@@ -66,3 +66,4 @@ $RECYCLE.BIN/
 *.vsix
 *.json
 !strings.json
+AutoKeyboard.spec

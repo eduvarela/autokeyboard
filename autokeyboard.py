@@ -2,6 +2,7 @@ import ctypes
 import json
 import locale
 import queue
+import sys
 import threading
 import time
 from copy import deepcopy
@@ -11,10 +12,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from ctypes import wintypes
 
-
-CONFIG_PATH = Path(__file__).with_name("autokeyboard_config.json")
-STRINGS_PATH = Path(__file__).with_name("strings.json")
-ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+PROJECT_DIR = Path(__file__).resolve().parent
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
+RUNTIME_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else PROJECT_DIR
+CONFIG_PATH = RUNTIME_DIR / "autokeyboard_config.json"
+STRINGS_PATH = RESOURCE_DIR / "strings.json"
+ASSETS_DIR = RESOURCE_DIR / "assets"
 ENGLISH_FLAG_PATH = ASSETS_DIR / "english.png"
 PORTUGUESE_FLAG_PATH = ASSETS_DIR / "portuguese.png"
 APP_ICON_PATH = ASSETS_DIR / "icon.png"
