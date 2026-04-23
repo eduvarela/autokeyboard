@@ -7,9 +7,11 @@ Aplicativo desktop para Windows, feito em Python com Tkinter, para automatizar o
 - Aplicação principal em `autokeyboard.py`
 - Interface gráfica customizada inspirada no layout de `DESIGN.md`
 - Suporte a `pt-BR` e `en` com troca de idioma em tempo real
+- Idioma padrão definido automaticamente a partir do idioma do sistema
 - Configuração persistida em `autokeyboard_config.json`
 - Strings centralizadas em `strings.json`
 - Assets visuais em `assets/`
+- Script de build do executável em `build_exe.ps1`
 
 ## Recursos
 
@@ -24,6 +26,8 @@ Aplicativo desktop para Windows, feito em Python com Tkinter, para automatizar o
 - Importação e exportação de perfil em `.json`
 - Troca de idioma por botão na barra superior
 - Layout responsivo para janelas menores
+- Ícone do app carregado a partir de `assets/icon.png`
+- Suporte a moldura escura do Windows quando disponível
 
 ## Como executar
 
@@ -32,6 +36,26 @@ Use Python no Windows:
 ```powershell
 python .\autokeyboard.py
 ```
+
+## Como gerar o .exe
+
+O projeto inclui um script para empacotar a aplicação com PyInstaller:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+```
+
+O script:
+
+- instala `pyinstaller` automaticamente se ele não estiver disponível
+- gera um executável `--onefile`
+- inclui `strings.json` no pacote
+- inclui a pasta `assets/` no pacote
+- usa `assets/icon.ico` como ícone do executável quando o arquivo existir
+
+Saída esperada:
+
+- `dist/AutoKeyboard.exe`
 
 ## Como testar
 
@@ -61,11 +85,27 @@ python -m unittest test_autokeyboard.py
 ## Arquivos principais
 
 - `autokeyboard.py`: aplicação principal, interface e automação
+- `build_exe.ps1`: script para gerar o executável `.exe`
 - `strings.json`: traduções e textos da interface
 - `autokeyboard_config.json`: configuração local salva automaticamente
 - `assets/english.png`: botão de idioma inglês
 - `assets/portuguese.png`: botão de idioma português
-- `test_autokeyboard.py`: testes das rotinas de parsing e validação
+- `assets/icon.png`: ícone usado pela janela do aplicativo
+- `assets/icon.ico`: ícone usado no executável gerado pelo PyInstaller
+- `test_autokeyboard.py`: testes das rotinas de parsing, strings e helpers
+
+## Comportamento no .exe
+
+Quando executado como script Python:
+
+- `strings.json` é lido da raiz do projeto
+- `assets/` é lido da pasta do projeto
+- `autokeyboard_config.json` é salvo na raiz do projeto
+
+Quando executado como `.exe`:
+
+- `strings.json` e `assets/` são carregados dos recursos empacotados
+- `autokeyboard_config.json` é salvo ao lado do executável
 
 ## Observações
 
