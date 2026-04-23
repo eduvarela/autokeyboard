@@ -17,6 +17,7 @@ STRINGS_PATH = Path(__file__).with_name("strings.json")
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ENGLISH_FLAG_PATH = ASSETS_DIR / "english.png"
 PORTUGUESE_FLAG_PATH = ASSETS_DIR / "portuguese.png"
+APP_ICON_PATH = ASSETS_DIR / "icon.png"
 DEFAULT_START_DELAY = 3
 DEFAULT_INTERVAL_MS = 1000
 DEFAULT_SEQUENCE_PAUSE_MS = 1000
@@ -24,6 +25,12 @@ KEY_HOLD_SECONDS = 0.03
 DEFAULT_USE_SCANCODES = True
 ENGLISH_LANGUAGE = "en"
 PORTUGUESE_LANGUAGE = "pt-BR"
+DWM_USE_IMMERSIVE_DARK_MODE = 20
+DWM_USE_IMMERSIVE_DARK_MODE_OLD = 19
+DWM_BORDER_COLOR = 34
+DWM_CAPTION_COLOR = 35
+DWM_TEXT_COLOR = 36
+GA_ROOT = 2
 LANGUAGE_ASSETS = {
     "pt-BR": PORTUGUESE_FLAG_PATH,
     "en": ENGLISH_FLAG_PATH,
@@ -317,6 +324,16 @@ def _merge_strings(base: dict, override: dict) -> dict:
         else:
             merged[key] = value
     return merged
+
+
+def hex_to_colorref(color: str) -> int:
+    cleaned = color.lstrip("#")
+    if len(cleaned) != 6:
+        raise ValueError(f"Invalid color: {color}")
+    red = int(cleaned[0:2], 16)
+    green = int(cleaned[2:4], 16)
+    blue = int(cleaned[4:6], 16)
+    return red | (green << 8) | (blue << 16)
 
 
 def detect_system_language() -> str:
@@ -665,10 +682,12 @@ class AutoKeyboardApp:
         load_app_strings()
         self.current_language = CURRENT_LANGUAGE
         self.language_images: dict[str, tk.PhotoImage] = {}
+        self.app_icon_image: tk.PhotoImage | None = None
         self._responsive_mode = ""
         self._resize_after_id: str | None = None
         self.root = root
         self.root.title(tr("app.title"))
+        self._apply_app_icon()
         self.root.geometry("1360x860")
         self.root.minsize(920, 860)
 
@@ -701,7 +720,9 @@ class AutoKeyboardApp:
         self._load_config()
         self._refresh_sequence_table()
         self._refresh_dashboard_summary()
+        self.root.after_idle(self._apply_window_chrome_theme)
         self._poll_messages()
+        self.root.bind("<Map>", self._handle_root_map, add="+")
         self.root.bind("<Configure>", self._handle_root_configure)
         self.root.after_idle(lambda: self._apply_responsive_layout(force=True))
         self.root.protocol("WM_DELETE_WINDOW", self._handle_close)
@@ -1081,6 +1102,100 @@ class AutoKeyboardApp:
             )
             button.pack(side="right", padx=(8, 0))
 
+    def _apply_app_icon(self) -> None:
+        if not APP_ICON_PATH.exists():
+            return
+
+        try:
+            self.app_icon_image = tk.PhotoImage(file=APP_ICON_PATH)
+            self.root.iconphoto(True, self.app_icon_image)
+        except tk.TclError:
+            self.app_icon_image = None
+
+    def _window_handles(self) -> list[int]:
+        try:
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+        except OSError:
+            return [self.root.winfo_id()]
+
+        user32.GetAncestor.argtypes = (wintypes.HWND, ctypes.c_uint)
+        user32.GetAncestor.restype = wintypes.HWND
+        user32.GetParent.argtypes = (wintypes.HWND,)
+        user32.GetParent.restype = wintypes.HWND
+
+        base_handle = int(self.root.winfo_id())
+        handles = [base_handle]
+
+        parent_handle = user32.GetParent(wintypes.HWND(base_handle))
+        if parent_handle:
+            handles.append(int(parent_handle))
+
+        root_handle = user32.GetAncestor(wintypes.HWND(base_handle), GA_ROOT)
+        if root_handle:
+            handles.append(int(root_handle))
+
+        unique_handles: list[int] = []
+        for handle in handles:
+            if handle and handle not in unique_handles:
+                unique_handles.append(handle)
+        return unique_handles
+
+    def _set_dwm_attribute(self, attribute: int, value: int) -> bool:
+        try:
+            dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+        except OSError:
+            return False
+
+        dwmapi.DwmSetWindowAttribute.argtypes = (
+            wintypes.HWND,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        )
+        dwmapi.DwmSetWindowAttribute.restype = ctypes.c_long
+
+        value_holder: ctypes._SimpleCData
+        if attribute in {DWM_BORDER_COLOR, DWM_CAPTION_COLOR, DWM_TEXT_COLOR}:
+            value_holder = wintypes.DWORD(value)
+        else:
+            value_holder = ctypes.c_int(value)
+
+        applied = False
+        for hwnd_value in self._window_handles():
+            hwnd = wintypes.HWND(hwnd_value)
+            result = dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                wintypes.DWORD(attribute),
+                ctypes.byref(value_holder),
+                wintypes.DWORD(ctypes.sizeof(value_holder)),
+            )
+            applied = applied or result == 0
+        return applied
+
+    def _apply_window_chrome_theme(self) -> None:
+        try:
+            self.root.update_idletasks()
+        except tk.TclError:
+            return
+
+        dark_mode_applied = self._set_dwm_attribute(DWM_USE_IMMERSIVE_DARK_MODE, 1)
+        if not dark_mode_applied:
+            self._set_dwm_attribute(DWM_USE_IMMERSIVE_DARK_MODE_OLD, 1)
+
+        for attribute, color in (
+            (DWM_BORDER_COLOR, self.colors["background"]),
+            (DWM_CAPTION_COLOR, self.colors["background"]),
+            (DWM_TEXT_COLOR, self.colors["text"]),
+        ):
+            try:
+                self._set_dwm_attribute(attribute, hex_to_colorref(color))
+            except ValueError:
+                continue
+
+    def _handle_root_map(self, _event: tk.Event) -> None:
+        self.root.after(50, self._apply_window_chrome_theme)
+        self.root.after(250, self._apply_window_chrome_theme)
+
     def _apply_button_cursors(self, parent: tk.Misc) -> None:
         for child in parent.winfo_children():
             if isinstance(child, (ttk.Button, tk.Button, ttk.Combobox)):
@@ -1093,6 +1208,7 @@ class AutoKeyboardApp:
     def _rebuild_ui(self) -> None:
         running = self.worker_thread is not None and self.worker_thread.is_alive()
         self.root.title(tr("app.title"))
+        self._apply_app_icon()
         for child in list(self.root.winfo_children()):
             child.destroy()
         self.language_images.clear()
@@ -1101,6 +1217,7 @@ class AutoKeyboardApp:
         self._refresh_sequence_table()
         self._refresh_dashboard_summary()
         self._set_running(running)
+        self.root.after_idle(self._apply_window_chrome_theme)
         self.root.after_idle(lambda: self._apply_responsive_layout(force=True))
 
     def _set_language(self, language_code: str) -> None:
