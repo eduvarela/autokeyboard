@@ -1476,7 +1476,7 @@ class AutoKeyboardApp:
         self.sequence_table.heading("combo", text=tr("labels.table_action"))
         self.sequence_table.heading("delay", text=tr("labels.table_wait"))
         self.sequence_table.column("order", width=70, anchor="center")
-        self.sequence_table.column("combo", width=250, anchor="w")
+        self.sequence_table.column("combo", width=250, anchor="center")
         self.sequence_table.column("delay", width=130, anchor="center")
         self.sequence_table.pack(fill="both", expand=True)
         self.sequence_table.bind("<<TreeviewSelect>>", self._populate_editor_from_selection)
@@ -1740,7 +1740,7 @@ class AutoKeyboardApp:
         combo_width = max(160 if stacked else 220, available - order_width - delay_width)
         self.sequence_table.column("order", width=order_width, minwidth=64, anchor="center", stretch=False)
         self.sequence_table.column("delay", width=delay_width, minwidth=96, anchor="center", stretch=False)
-        self.sequence_table.column("combo", width=combo_width, minwidth=160, anchor="w", stretch=True)
+        self.sequence_table.column("combo", width=combo_width, minwidth=160, anchor="center", stretch=True)
 
     def _save_profile(self) -> None:
         self._save_config()
